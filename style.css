@@ -5,14 +5,23 @@
 }
 
 :root {
-  --green: #1a7340;
-  --green-light: #2ecc71;
-  --green-dark: #0f4d28;
-  --gold: #f1c40f;
-  --white: #fff;
-  --gray-light: #f4f6f4;
-  --gray: #ddd;
-  --text: #222;
+  /* Thuisshirt: Nederlands oranje */
+  --orange: #FF6200;
+  --orange-dark: #cc4e00;
+  --orange-light: #ff8533;
+  --orange-pale: #fff2eb;
+
+  /* Uitshirt: wit met oranje accenten */
+  --white: #ffffff;
+  --off-white: #fdf6f0;
+  --gray-light: #f5f0ed;
+  --gray: #e0d8d4;
+
+  /* Donker (contrast) */
+  --dark: #1a1210;
+  --dark-mid: #3d2b20;
+
+  --text: #1a1210;
   --radius: 8px;
 }
 
@@ -25,13 +34,13 @@ body {
 
 /* ===== HEADER ===== */
 header {
-  background: var(--green-dark);
+  background: var(--orange);
   color: white;
   padding: 0 1rem;
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 10px rgba(255,98,0,0.4);
 }
 
 .header-inner {
@@ -96,7 +105,7 @@ main {
 
 .join-card h2 {
   font-size: 1.7rem;
-  color: var(--green-dark);
+  color: var(--orange-dark);
   margin-bottom: 0.5rem;
 }
 
@@ -124,11 +133,11 @@ main {
 
 .input-group input:focus {
   outline: none;
-  border-color: var(--green);
+  border-color: var(--orange);
 }
 
 .btn-primary {
-  background: var(--green);
+  background: var(--orange);
   color: white;
   border: none;
   padding: 0.65rem 1.1rem;
@@ -140,12 +149,12 @@ main {
   transition: background 0.15s;
 }
 
-.btn-primary:hover { background: var(--green-dark); }
+.btn-primary:hover { background: var(--orange-dark); }
 
 .btn-secondary {
   background: white;
-  color: var(--green);
-  border: 2px solid var(--green);
+  color: var(--orange-dark);
+  border: 2px solid var(--orange);
   padding: 0.45rem 1rem;
   border-radius: var(--radius);
   font-size: 0.875rem;
@@ -154,7 +163,7 @@ main {
   transition: background 0.15s;
 }
 
-.btn-secondary:hover { background: #edf7f1; }
+.btn-secondary:hover { background: var(--orange-pale); }
 
 .error-msg {
   color: #c0392b;
@@ -164,11 +173,11 @@ main {
 
 .scoring-info {
   text-align: left;
-  background: #edf7f1;
+  background: var(--orange-pale);
   border-radius: var(--radius);
   padding: 0.9rem 1rem;
   font-size: 0.88rem;
-  color: #444;
+  color: var(--dark-mid);
   margin-top: 1.2rem;
 }
 
@@ -185,7 +194,7 @@ main {
 
 .view-header h2 {
   font-size: 1.4rem;
-  color: var(--green-dark);
+  color: var(--orange-dark);
 }
 
 /* ===== PREDICTIONS ===== */
@@ -208,7 +217,7 @@ main {
 }
 
 .group-section h3 {
-  background: var(--green-dark);
+  background: var(--orange);
   color: white;
   padding: 0.65rem 1rem;
   font-size: 0.95rem;
@@ -268,7 +277,7 @@ main {
 
 .score-input input:focus {
   outline: none;
-  border-color: var(--green);
+  border-color: var(--orange);
 }
 
 .score-sep { color: #999; font-weight: 700; }
@@ -276,7 +285,7 @@ main {
 .pred-score {
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--green-dark);
+  color: var(--orange-dark);
   min-width: 52px;
   text-align: center;
 }
@@ -295,7 +304,7 @@ main {
 .result {
   font-weight: 800;
   font-size: 1rem;
-  color: var(--green-dark);
+  color: var(--orange-dark);
 }
 
 .date {
@@ -322,7 +331,7 @@ main {
   width: 100%;
   margin-top: 1.2rem;
   padding: 0.9rem;
-  background: var(--green);
+  background: var(--orange);
   color: white;
   border: none;
   border-radius: var(--radius);
@@ -332,7 +341,7 @@ main {
   transition: background 0.15s;
 }
 
-.save-btn:hover { background: var(--green-dark); }
+.save-btn:hover { background: var(--orange-dark); }
 .save-btn:disabled { background: #aaa; cursor: default; }
 
 /* ===== STANDINGS ===== */
@@ -353,7 +362,7 @@ main {
 }
 
 .standings-table thead {
-  background: var(--green-dark);
+  background: var(--orange);
   color: white;
 }
 
@@ -380,7 +389,7 @@ main {
 
 .standings-table tbody tr:last-child td { border-bottom: none; }
 
-.standings-table tbody tr.me { background: #edf7f1; }
+.standings-table tbody tr.me { background: var(--orange-pale); }
 .standings-table tbody tr:nth-child(1) .rank { font-size: 1.2rem; }
 
 .rank { font-weight: 700; color: #888; }
