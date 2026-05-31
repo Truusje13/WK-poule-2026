@@ -173,18 +173,16 @@ function showView(name) {
 // ============================================================
 
 async function loadMatches() {
+  // Wedstrijden en uitslagen worden bijgehouden via GitHub Actions → Firebase.
+  // De browser leest alleen uit Firebase, zodat CORS geen probleem is.
   const matchesSnap = await get(ref(db, "matches"));
   if (matchesSnap.exists()) {
     matches = matchesSnap.val();
-  } else if (FOOTBALL_API_TOKEN) {
-    try {
-      await fetchMatchesFromAPI();
-    } catch (e) {
-      console.warn("Wedstrijden ophalen mislukt:", e);
-    }
   }
-  // Resultaten op de achtergrond bijwerken
-  refreshResults().catch(console.error);
+  // Punten herberekenen als er nieuwe uitslagen zijn
+  if (Object.keys(matches).length > 0) {
+    recalculateAllStandings().catch(console.error);
+  }
 }
 
 async function fetchMatchesFromAPI() {
@@ -224,52 +222,10 @@ async function fetchMatchesFromAPI() {
   await set(ref(db, "matches"), matches);
 }
 
+// Uitslagen worden bijgewerkt via GitHub Actions (elke 30 min).
+// Deze functie is niet meer nodig maar wordt bewaard als fallback.
 async function refreshResults() {
-  if (!FOOTBALL_API_TOKEN) return;
-
-  // Throttle: maximaal eens per X minuten echte API-call
-  const lastFetch = parseInt(localStorage.getItem("poule_last_fetch") || "0");
-  if (Date.now() - lastFetch < RESULTS_CACHE_MINUTES * 60 * 1000) return;
-
-  try {
-    const res = await fetch(
-      "https://api.football-data.org/v4/competitions/WC/matches?status=FINISHED&stage=GROUP_STAGE",
-      { headers: { "X-Auth-Token": FOOTBALL_API_TOKEN } }
-    );
-    if (!res.ok) return;
-    const data = await res.json();
-
-    const updates = {};
-    let changed = false;
-
-    for (const m of data.matches) {
-      const h = m.score?.fullTime?.home;
-      const a = m.score?.fullTime?.away;
-      if (h === null || h === undefined) continue;
-
-      const stored = matches[m.id];
-      if (!stored || stored.homeScore !== h || stored.awayScore !== a) {
-        updates[`matches/${m.id}/status`] = "FINISHED";
-        updates[`matches/${m.id}/homeScore`] = h;
-        updates[`matches/${m.id}/awayScore`] = a;
-        if (matches[m.id]) {
-          matches[m.id].status = "FINISHED";
-          matches[m.id].homeScore = h;
-          matches[m.id].awayScore = a;
-        }
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      await update(ref(db), updates);
-      await recalculateAllStandings();
-    }
-
-    localStorage.setItem("poule_last_fetch", String(Date.now()));
-  } catch (e) {
-    console.warn("Resultaten ophalen mislukt:", e);
-  }
+  // no-op: zie .github/workflows/sync-matches.yml
 }
 
 // ============================================================

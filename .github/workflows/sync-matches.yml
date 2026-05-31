@@ -1,0 +1,48 @@
+name: Sync WK 2026 wedstrijden & uitslagen
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # Elke 30 minuten
+  workflow_dispatch:          # Handmatig starten via GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Haal wedstrijden op van football-data.org
+        id: fetch
+        run: |
+          curl -s \
+            -H "X-Auth-Token: ${{ secrets.FOOTBALL_API_TOKEN }}" \
+            "https://api.football-data.org/v4/competitions/WC/matches?season=2026" \
+            -o matches_raw.json
+
+          # Zet om naar het Firebase-formaat met jq
+          jq '
+            .matches
+            | map(select(.stage == "GROUP_STAGE"))
+            | map({
+                key: (.id | tostring),
+                value: {
+                  homeTeam: .homeTeam.name,
+                  awayTeam: .awayTeam.name,
+                  utcDate: .utcDate,
+                  status: .status,
+                  homeScore: (.score.fullTime.home // null),
+                  awayScore: (.score.fullTime.away // null),
+                  group: (.group // "UNKNOWN")
+                }
+              })
+            | from_entries
+          ' matches_raw.json > matches_firebase.json
+
+          echo "Wedstrijden verwerkt: $(jq length matches_firebase.json)"
+
+      - name: Schrijf naar Firebase Realtime Database
+        run: |
+          curl -s -X PUT \
+            "${{ secrets.FIREBASE_DB_URL }}/matches.json" \
+            -H "Content-Type: application/json" \
+            -d @matches_firebase.json
+          echo "✅ Firebase bijgewerkt"
