@@ -189,14 +189,28 @@ async function loadMatches() {
 
 async function fetchMatchesFromAPI() {
   const res = await fetch(
-    "https://api.football-data.org/v4/competitions/WC/matches?stage=GROUP_STAGE",
+    "https://api.football-data.org/v4/competitions/WC/matches",
     { headers: { "X-Auth-Token": FOOTBALL_API_TOKEN } }
   );
-  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (!res.ok) {
+    const msg = await res.text().catch(() => res.status);
+    throw new Error(`API ${res.status}: ${msg}`);
+  }
   const data = await res.json();
 
+  if (!data.matches || data.matches.length === 0) {
+    throw new Error("Geen wedstrijden gevonden in API-response");
+  }
+
+  // Houd alleen groepswedstrijden (stage bevat "GROUP")
+  const groupMatches = data.matches.filter(m =>
+    !m.stage || m.stage.includes("GROUP") || m.stage === "PRELIMINARY_ROUND"
+  );
+
+  const toStore = groupMatches.length > 0 ? groupMatches : data.matches;
+
   matches = {};
-  for (const m of data.matches) {
+  for (const m of toStore) {
     matches[m.id] = {
       homeTeam: m.homeTeam.name,
       awayTeam: m.awayTeam.name,
@@ -204,7 +218,7 @@ async function fetchMatchesFromAPI() {
       status: m.status,
       homeScore: m.score?.fullTime?.home ?? null,
       awayScore: m.score?.fullTime?.away ?? null,
-      group: m.group ?? "UNKNOWN"
+      group: m.group ?? m.stage ?? "UNKNOWN"
     };
   }
   await set(ref(db, "matches"), matches);
@@ -287,7 +301,28 @@ async function renderPredictions() {
 
   if (Object.keys(matches).length === 0) {
     container.innerHTML = "<p class='loading'>⏳ Wedstrijden laden...</p>";
-    return;
+    let loadError = null;
+    try {
+      await loadMatches();
+    } catch (e) {
+      loadError = e;
+      console.warn(e);
+    }
+    if (Object.keys(matches).length === 0) {
+      container.innerHTML = `
+        <div class="notice" style="margin-top:1rem">
+          ⚠️ De wedstrijden konden niet worden opgehaald.
+          ${loadError ? `<br><small style="opacity:0.7">Fout: ${loadError.message}</small>` : ""}
+          <ul style="margin-top:0.5rem;padding-left:1.2rem;line-height:1.8">
+            <li>De football-data.org API heeft nog geen WK 2026 schema gepubliceerd</li>
+            <li>Je API token is ongeldig of verlopen</li>
+          </ul>
+          <p style="margin-top:0.75rem">
+            <button onclick="renderPredictions()" class="btn-secondary">🔄 Opnieuw proberen</button>
+          </p>
+        </div>`;
+      return;
+    }
   }
 
   const predSnap = await get(ref(db, `predictions/${currentUser.id}`));
