@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚽ WK 2026 Voetbalpoule</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <h1>⚽ WK 2026 Poule</h1>
+      <nav id="main-nav" class="hidden">
+        <span id="user-name"></span>
+        <button onclick="showView('predictions')">Voorspellingen</button>
+        <button onclick="showView('standings')">Stand</button>
+        <button onclick="logout()" class="logout-btn">Uitloggen</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Meedoen -->
+    <div id="view-join" class="view">
+      <div class="card join-card">
+        <div class="trophy">🏆</div>
+        <h2>WK 2026 Poule</h2>
+        <p>Vul je naam in en voorspel alle groepswedstrijden. Na elke wedstrijd worden je punten automatisch bijgehouden.</p>
+        <div class="input-group">
+          <input type="text" id="name-input" placeholder="Jouw naam" maxlength="30"
+            onkeydown="if(event.key==='Enter') joinPoule()" autocomplete="name" />
+          <button onclick="joinPoule()" class="btn-primary">Meedoen →</button>
+        </div>
+        <div id="join-error" class="error-msg hidden"></div>
+        <div class="scoring-info">
+          <p><strong>Puntentelling:</strong></p>
+          <p>✅ Exacte uitslag: <strong>3 punten</strong></p>
+          <p>✓ Juiste winnaar of gelijkspel: <strong>1 punt</strong></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voorspellingen -->
+    <div id="view-predictions" class="view hidden">
+      <div class="view-header">
+        <h2>Jouw voorspellingen</h2>
+        <button class="btn-secondary" onclick="showView('standings')">Klassement →</button>
+      </div>
+      <div id="predictions-container">
+        <p class="loading">⏳ Wedstrijden laden...</p>
+      </div>
+    </div>
+
+    <!-- Klassement -->
+    <div id="view-standings" class="view hidden">
+      <div class="view-header">
+        <h2>Klassement</h2>
+        <button class="btn-secondary" onclick="showView('predictions')">Mijn voorspellingen</button>
+      </div>
+      <div id="standings-container">
+        <p class="loading">⏳ Stand laden...</p>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
