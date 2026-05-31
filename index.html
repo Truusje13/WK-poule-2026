@@ -64,5 +64,14 @@
   </main>
 
   <script type="module" src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        // Controleer meteen op updates, en daarna elke 60 seconden
+        reg.update();
+        setInterval(() => reg.update(), 60000);
+      });
+    }
+  </script>
 </body>
 </html>
