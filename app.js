@@ -801,6 +801,7 @@ const TEAM_NL = {
   "Gabon":              "Gabon",
   "Guinea":             "Guinee",
   "Cape Verde":         "Kaapverdië",
+  "Cape Verde Islands": "Kaapverdië",
   "Equatorial Guinea":  "Equatoriaal-Guinea",
   "Comoros":            "Comoren",
   "Libya":              "Libië",
