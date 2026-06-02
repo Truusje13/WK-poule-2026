@@ -284,12 +284,14 @@ async function renderPredictions() {
   const predSnap = await get(ref(db, `predictions/${currentUser.id}`));
   const existing = predSnap.exists() ? predSnap.val() : {};
 
-  // Groepeer per groep
-  const groups = {};
+  // Groepeer per ronde, daarbinnen per groep (alleen groepsfase)
+  const stages = {};
   for (const [id, m] of Object.entries(matches)) {
-    const g = m.group || "UNKNOWN";
-    if (!groups[g]) groups[g] = [];
-    groups[g].push({ id, ...m });
+    const s = m.stage || "GROUP_STAGE";
+    if (!stages[s]) stages[s] = {};
+    const key = (s === "GROUP_STAGE") ? (m.group || "UNKNOWN") : s;
+    if (!stages[s][key]) stages[s][key] = [];
+    stages[s][key].push({ id, ...m });
   }
 
   let html = "";
@@ -298,51 +300,66 @@ async function renderPredictions() {
     html += `<div class="notice">⏰ De deadline is verstreken — voorspellingen zijn gesloten. Hieronder zie je jouw keuzes en de punten die je hebt gescoord.</div>`;
   }
 
-  const sortedGroups = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  for (const stage of STAGE_ORDER) {
+    if (!stages[stage]) continue;
 
-  for (const [group, groupMatches] of sortedGroups) {
-    const label = group.replace("GROUP_", "Groep ");
-    html += `<div class="group-section"><h3>${label}</h3>`;
-
-    const sorted = [...groupMatches].sort(
-      (a, b) => new Date(a.utcDate) - new Date(b.utcDate)
-    );
-
-    for (const m of sorted) {
-      const pred = existing[m.id] ?? { home: "", away: "" };
-      const pts = calcPoints(m, pred);
-      const isFinished = m.status === "FINISHED";
-
-      const metaHtml = isFinished
-        ? `<span class="result">${m.homeScore}–${m.awayScore}</span>${
-            pts !== null
-              ? `<span class="badge badge-${pts}">${pts} pt${pts !== 1 ? "s" : ""}</span>`
-              : ""
-          }`
-        : `<span class="date">${formatDate(m.utcDate)}</span>`;
-
-      const scoreHtml = locked
-        ? `<span class="pred-score ${pred.home === "" ? "empty" : ""}">
-            ${pred.home !== "" ? `${pred.home}–${pred.away}` : "–"}
-           </span>`
-        : `<input type="number" min="0" max="20" value="${pred.home ?? ""}"
-             data-match="${m.id}" data-side="home" />
-           <span class="score-sep">–</span>
-           <input type="number" min="0" max="20" value="${pred.away ?? ""}"
-             data-match="${m.id}" data-side="away" />`;
-
-      html += `
-        <div class="match-row${isFinished ? " finished" : ""}">
-          <div class="teams">
-            <span class="team home">${m.homeTeam}</span>
-            <div class="score-input">${scoreHtml}</div>
-            <span class="team away">${m.awayTeam}</span>
-          </div>
-          <div class="match-meta">${metaHtml}</div>
-        </div>`;
+    // Ronde-kop (alleen voor knockout)
+    if (stage !== "GROUP_STAGE") {
+      html += `<div class="stage-header">${STAGE_LABEL[stage] ?? stage}</div>`;
     }
 
-    html += "</div>";
+    const subKeys = Object.keys(stages[stage]).sort();
+
+    for (const key of subKeys) {
+      const sectionMatches = [...stages[stage][key]].sort(
+        (a, b) => new Date(a.utcDate) - new Date(b.utcDate)
+      );
+
+      let sectionLabel = "";
+      if (stage === "GROUP_STAGE") {
+        sectionLabel = key.replace("GROUP_", "Groep ");
+      } else {
+        sectionLabel = STAGE_LABEL[stage] ?? stage;
+      }
+
+      html += `<div class="group-section"><h3>${sectionLabel}</h3>`;
+
+      for (const m of sectionMatches) {
+        const pred = existing[m.id] ?? { home: "", away: "" };
+        const pts = calcPoints(m, pred);
+        const isFinished = m.status === "FINISHED";
+
+        const metaHtml = isFinished
+          ? `<span class="result">${m.homeScore}–${m.awayScore}</span>${
+              pts !== null
+                ? `<span class="badge badge-${pts}">${pts} pt${pts !== 1 ? "s" : ""}</span>`
+                : ""
+            }`
+          : `<span class="date">${formatDate(m.utcDate)}</span>`;
+
+        const scoreHtml = locked
+          ? `<span class="pred-score ${pred.home === "" ? "empty" : ""}">
+              ${pred.home !== "" ? `${pred.home}–${pred.away}` : "–"}
+             </span>`
+          : `<input type="number" min="0" max="20" value="${pred.home ?? ""}"
+               data-match="${m.id}" data-side="home" />
+             <span class="score-sep">–</span>
+             <input type="number" min="0" max="20" value="${pred.away ?? ""}"
+               data-match="${m.id}" data-side="away" />`;
+
+        html += `
+          <div class="match-row${isFinished ? " finished" : ""}">
+            <div class="teams">
+              <span class="team home">${m.homeTeam}</span>
+              <div class="score-input">${scoreHtml}</div>
+              <span class="team away">${m.awayTeam}</span>
+            </div>
+            <div class="match-meta">${metaHtml}</div>
+          </div>`;
+      }
+
+      html += "</div>";
+    }
   }
 
   if (!locked) {
@@ -473,6 +490,21 @@ function renderStandings() {
 // ============================================================
 // HELPERS
 // ============================================================
+
+const STAGE_LABEL = {
+  GROUP_STAGE:    "Groepsfase",
+  LAST_32:        "Ronde van 32",
+  LAST_16:        "Ronde van 16",
+  QUARTER_FINALS: "Kwartfinales",
+  SEMI_FINALS:    "Halve finales",
+  THIRD_PLACE:    "Troostfinale",
+  FINAL:          "Finale"
+};
+
+const STAGE_ORDER = [
+  "GROUP_STAGE", "LAST_32", "LAST_16",
+  "QUARTER_FINALS", "SEMI_FINALS", "THIRD_PLACE", "FINAL"
+];
 
 function formatDate(utcDate) {
   return new Date(utcDate).toLocaleString("nl-NL", {

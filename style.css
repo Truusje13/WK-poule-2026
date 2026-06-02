@@ -197,6 +197,18 @@ main {
   color: var(--orange-dark);
 }
 
+/* ===== RONDE-HEADER (knockout) ===== */
+.stage-header {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--orange-dark);
+  margin: 1.8rem 0 0.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 3px solid var(--orange);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 /* ===== PREDICTIONS ===== */
 .notice {
   background: #fff8e1;

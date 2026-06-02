@@ -21,7 +21,6 @@ jobs:
           # Zet om naar het Firebase-formaat met jq
           jq '
             .matches
-            | map(select(.stage == "GROUP_STAGE"))
             | map({
                 key: (.id | tostring),
                 value: {
@@ -29,9 +28,10 @@ jobs:
                   awayTeam: .awayTeam.name,
                   utcDate: .utcDate,
                   status: .status,
+                  stage: .stage,
                   homeScore: (.score.fullTime.home // null),
                   awayScore: (.score.fullTime.away // null),
-                  group: (.group // "UNKNOWN")
+                  group: (.group // null)
                 }
               })
             | from_entries
