@@ -1143,18 +1143,7 @@ function resolveBracketSlot(slot, predictedStandings, teamStats) {
   if (slot.type === "winner")    return predictedStandings[slot.group]?.[0] ?? null;
   if (slot.type === "runner-up") return predictedStandings[slot.group]?.[1] ?? null;
   if (slot.type === "third") {
-    // Zoek de beste 3e-plaatser uit de opgegeven groepen
-    const candidates = slot.groups
-      .map(g => predictedStandings[`GROUP_${g}`]?.[2])
-      .filter(Boolean);
-    if (candidates.length === 0) return null;
-    // Sorteer op punten, doelsaldo, doelpunten
-    candidates.sort((a, b) => {
-      const sa = teamStats?.[a] ?? { pts: 0, gd: 0, gf: 0 };
-      const sb = teamStats?.[b] ?? { pts: 0, gd: 0, gf: 0 };
-      return sb.pts - sa.pts || sb.gd - sa.gd || sb.gf - sa.gf;
-    });
-    return candidates[0];
+    return `beste 3e uit groep ${slot.groups.join("/")}`;
   }
   return null;
 }
