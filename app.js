@@ -316,6 +316,9 @@ async function renderPredictions() {
     stages[s][key].push({ id, ...m });
   }
 
+  // Bereken voorspelde groepsstand voor bracket-opvulling
+  const predictedStandings = calculatePredictedGroupStandings(existing);
+
   let html = "";
 
   if (locked) {
@@ -369,12 +372,29 @@ async function renderPredictions() {
              <input type="number" min="0" max="20" value="${pred.away ?? ""}"
                data-match="${m.id}" data-side="away" />`;
 
+        // Vul teamnamen in vanuit bracket als ze nog onbekend zijn
+        let homeLabel = m.homeTeam ? t(m.homeTeam) : null;
+        let awayLabel = m.awayTeam ? t(m.awayTeam) : null;
+        if ((!homeLabel || !awayLabel) && LAST_32_BRACKET[m.id]) {
+          const slot = LAST_32_BRACKET[m.id];
+          if (!homeLabel) {
+            const resolved = resolveBracketSlot(slot.home, predictedStandings);
+            homeLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
+          }
+          if (!awayLabel) {
+            const resolved = resolveBracketSlot(slot.away, predictedStandings);
+            awayLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
+          }
+        }
+        homeLabel = homeLabel || "?";
+        awayLabel = awayLabel || "?";
+
         html += `
           <div class="match-row${isFinished ? " finished" : ""}">
             <div class="teams">
-              <span class="team home">${t(m.homeTeam)}</span>
+              <span class="team home">${homeLabel}</span>
               <div class="score-input">${scoreHtml}</div>
-              <span class="team away">${t(m.awayTeam)}</span>
+              <span class="team away">${awayLabel}</span>
             </div>
             <div class="match-meta">${metaHtml}</div>
           </div>`;
@@ -420,6 +440,7 @@ async function renderPredictions() {
   container.querySelectorAll("input[type=number]").forEach(input => {
     input.addEventListener("input", () => {
       updatePredictedAdvancement();
+      updateKnockoutTeamLabels();
       // Auto-opslaan: 2 seconden na de laatste invoer
       clearTimeout(autoSaveTimer);
       showAutoSaveStatus("⏳ Wordt opgeslagen...");
@@ -471,6 +492,36 @@ function readCurrentPreds() {
     }
   });
   return currentPreds;
+}
+
+function updateKnockoutTeamLabels() {
+  const currentPreds   = readCurrentPreds();
+  const predicted      = calculatePredictedGroupStandings(currentPreds);
+
+  // Update alle Last 32 match-rijen met voorspelde teamnamen
+  document.querySelectorAll(".match-row").forEach(row => {
+    const inputs = row.querySelectorAll("input[data-match]");
+    if (inputs.length === 0) return;
+    const matchId = inputs[0]?.dataset.match;
+    if (!matchId || !LAST_32_BRACKET[matchId]) return;
+
+    const slot = LAST_32_BRACKET[matchId];
+    const homeEl = row.querySelector(".team.home");
+    const awayEl = row.querySelector(".team.away");
+
+    if (homeEl) {
+      const resolved = resolveBracketSlot(slot.home, predicted);
+      homeEl.innerHTML = resolved
+        ? `<span class="predicted-name">${t(resolved)}</span>`
+        : "?";
+    }
+    if (awayEl) {
+      const resolved = resolveBracketSlot(slot.away, predicted);
+      awayEl.innerHTML = resolved
+        ? `<span class="predicted-name">${t(resolved)}</span>`
+        : "?";
+    }
+  });
 }
 
 function updatePredictedAdvancement() {
@@ -996,6 +1047,35 @@ const TEAM_NL = {
 function t(name) {
   if (!name) return name;
   return TEAM_NL[name] ?? name;
+}
+
+// WK 2026 Last 32 bracket: welke groepspositie speelt in welke wedstrijd
+// Gebaseerd op het officiële FIFA-schema (matchnummers 73–88)
+const LAST_32_BRACKET = {
+  "537417": { home: {type:"runner-up", group:"GROUP_A"}, away: {type:"runner-up", group:"GROUP_B"} },
+  "537423": { home: {type:"winner",    group:"GROUP_C"}, away: {type:"runner-up", group:"GROUP_F"} },
+  "537415": { home: {type:"winner",    group:"GROUP_E"}, away: {type:"third", groups:["A","B","C","D","F"]} },
+  "537418": { home: {type:"winner",    group:"GROUP_F"}, away: {type:"runner-up", group:"GROUP_C"} },
+  "537424": { home: {type:"runner-up", group:"GROUP_E"}, away: {type:"runner-up", group:"GROUP_I"} },
+  "537416": { home: {type:"winner",    group:"GROUP_I"}, away: {type:"third", groups:["C","D","F","G","H"]} },
+  "537425": { home: {type:"winner",    group:"GROUP_A"}, away: {type:"third", groups:["C","E","F","H","I"]} },
+  "537426": { home: {type:"winner",    group:"GROUP_L"}, away: {type:"third", groups:["E","H","I","J","K"]} },
+  "537422": { home: {type:"winner",    group:"GROUP_G"}, away: {type:"third", groups:["A","E","H","I","J"]} },
+  "537421": { home: {type:"winner",    group:"GROUP_D"}, away: {type:"third", groups:["B","E","F","I","J"]} },
+  "537420": { home: {type:"winner",    group:"GROUP_H"}, away: {type:"runner-up", group:"GROUP_J"} },
+  "537419": { home: {type:"runner-up", group:"GROUP_K"}, away: {type:"runner-up", group:"GROUP_L"} },
+  "537429": { home: {type:"winner",    group:"GROUP_B"}, away: {type:"third", groups:["E","F","G","I","J"]} },
+  "537428": { home: {type:"runner-up", group:"GROUP_D"}, away: {type:"runner-up", group:"GROUP_G"} },
+  "537427": { home: {type:"winner",    group:"GROUP_J"}, away: {type:"runner-up", group:"GROUP_H"} },
+  "537430": { home: {type:"winner",    group:"GROUP_K"}, away: {type:"third", groups:["D","E","I","J","L"]} },
+};
+
+// Bepaal de voorspelde teamnaam voor een bracket-slot op basis van groepsstand
+function resolveBracketSlot(slot, predictedStandings) {
+  if (slot.type === "winner")    return predictedStandings[slot.group]?.[0] ?? null;
+  if (slot.type === "runner-up") return predictedStandings[slot.group]?.[1] ?? null;
+  if (slot.type === "third")     return `beste 3e uit groep ${slot.groups.join("/")}`;
+  return null;
 }
 
 const STAGE_LABEL = {
