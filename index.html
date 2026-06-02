@@ -14,6 +14,7 @@
         <span id="user-name"></span>
         <button onclick="showView('predictions')">Voorspellingen</button>
         <button onclick="showView('standings')">Stand</button>
+        <button onclick="showView('admin')" class="admin-btn">⚙️ Beheer</button>
         <button onclick="logout()" class="logout-btn">Uitloggen</button>
       </nav>
     </div>
@@ -48,6 +49,28 @@
       </div>
       <div id="predictions-container">
         <p class="loading">⏳ Wedstrijden laden...</p>
+      </div>
+    </div>
+
+    <!-- Beheer -->
+    <div id="view-admin" class="view hidden">
+      <div id="admin-login" class="card join-card">
+        <div class="trophy">🔐</div>
+        <h2>Beheer</h2>
+        <p>Vul het beheerderswachtwoord in.</p>
+        <div class="input-group">
+          <input type="password" id="admin-password-input" placeholder="Wachtwoord"
+            onkeydown="if(event.key==='Enter') adminLogin()" />
+          <button onclick="adminLogin()" class="btn-primary">Inloggen →</button>
+        </div>
+        <div id="admin-login-error" class="error-msg hidden">Onjuist wachtwoord.</div>
+      </div>
+      <div id="admin-panel" class="hidden">
+        <div class="view-header">
+          <h2>Beheer deelnemers</h2>
+          <button class="btn-secondary" onclick="showView('standings')">← Terug</button>
+        </div>
+        <div id="admin-participants-list"></div>
       </div>
     </div>
 

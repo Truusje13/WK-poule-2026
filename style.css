@@ -411,6 +411,55 @@ main {
 
 .pts-cell { font-weight: 800; font-size: 1.05rem; }
 
+/* ===== BEHEER ===== */
+.admin-btn {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  padding: 0.4rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.15s;
+}
+.admin-btn:hover { background: rgba(255,255,255,0.28); }
+
+.admin-list {
+  background: white;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.admin-row:last-child { border-bottom: none; }
+
+.admin-name {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.btn-delete {
+  background: #fde8e8;
+  color: #c0392b;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.btn-delete:hover { background: #f5b7b1; }
+
 /* ===== MISC ===== */
 .loading {
   text-align: center;

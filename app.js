@@ -18,6 +18,9 @@ const FIREBASE_CONFIG = {
 //         en plak je API token hier
 const FOOTBALL_API_TOKEN = "bcd297bb8a1f480ab306363945ca07c1";
 
+// Beheerderswachtwoord — verander dit naar iets wat jij wilt
+const ADMIN_PASSWORD = "oranje2026";
+
 // ============================================================
 // INSTELLINGEN (hoef je normaal niet aan te passen)
 // ============================================================
@@ -166,6 +169,12 @@ function showView(name) {
   document.getElementById(`view-${name}`).classList.remove("hidden");
   if (name === "predictions") renderPredictions();
   if (name === "standings") renderStandings();
+  if (name === "admin") {
+    document.getElementById("admin-login").classList.remove("hidden");
+    document.getElementById("admin-panel").classList.add("hidden");
+    document.getElementById("admin-password-input").value = "";
+    document.getElementById("admin-login-error").classList.add("hidden");
+  }
 }
 
 // ============================================================
@@ -515,6 +524,73 @@ function formatDate(utcDate) {
 }
 
 // ============================================================
+// BEHEER
+// ============================================================
+
+function adminLogin() {
+  const input = document.getElementById("admin-password-input");
+  const error = document.getElementById("admin-login-error");
+  if (input.value === ADMIN_PASSWORD) {
+    document.getElementById("admin-login").classList.add("hidden");
+    document.getElementById("admin-panel").classList.remove("hidden");
+    renderAdminPanel();
+  } else {
+    error.classList.remove("hidden");
+    input.value = "";
+  }
+}
+
+async function renderAdminPanel() {
+  const container = document.getElementById("admin-participants-list");
+  container.innerHTML = "<p class='loading'>Laden...</p>";
+
+  const snap = await get(ref(db, "participants"));
+  if (!snap.exists()) {
+    container.innerHTML = "<p class='loading'>Geen deelnemers gevonden.</p>";
+    return;
+  }
+
+  const participants = snap.val();
+  let html = `<div class="admin-list">`;
+
+  for (const [id, p] of Object.entries(participants).sort(([,a],[,b]) => a.name.localeCompare(b.name))) {
+    html += `
+      <div class="admin-row" id="admin-row-${id}">
+        <span class="admin-name">${p.name}</span>
+        <button class="btn-delete" onclick="deleteParticipant('${id}', '${p.name}')">🗑 Verwijderen</button>
+      </div>`;
+  }
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+async function deleteParticipant(id, name) {
+  if (!confirm(`Weet je zeker dat je "${name}" wilt verwijderen? Dit verwijdert ook alle voorspellingen en punten van deze deelnemer.`)) return;
+
+  try {
+    // Verwijder uit participants, predictions en standings tegelijk
+    const updates = {};
+    updates[`participants/${id}`] = null;
+    updates[`predictions/${id}`] = null;
+    updates[`standings/${id}`] = null;
+    await update(ref(db), updates);
+
+    // Verwijder de rij uit de lijst
+    document.getElementById(`admin-row-${id}`)?.remove();
+
+    const container = document.getElementById("admin-participants-list");
+    const rows = container.querySelectorAll(".admin-row");
+    if (rows.length === 0) {
+      container.innerHTML = "<p class='loading'>Geen deelnemers meer.</p>";
+    }
+  } catch (e) {
+    alert("Fout bij verwijderen: " + e.message);
+    console.error(e);
+  }
+}
+
+// ============================================================
 // GLOBALS (aangeroepen vanuit HTML onclick)
 // ============================================================
 
@@ -522,5 +598,7 @@ window.showView = showView;
 window.joinPoule = joinPoule;
 window.logout = logout;
 window.savePredictions = savePredictions;
+window.adminLogin = adminLogin;
+window.deleteParticipant = deleteParticipant;
 
 init();
