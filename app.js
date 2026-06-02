@@ -737,6 +737,7 @@ const TEAM_NL = {
   "Finland":            "Finland",
   "Iceland":            "IJsland",
   "Bosnia and Herzegovina": "Bosnië-Herzegovina",
+  "Bosnia-Herzegovina":     "Bosnië-Herzegovina",
   "Montenegro":         "Montenegro",
   "Bulgaria":           "Bulgarije",
   "Northern Ireland":   "Noord-Ierland",
