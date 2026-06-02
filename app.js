@@ -372,9 +372,9 @@ async function renderPredictions() {
         html += `
           <div class="match-row${isFinished ? " finished" : ""}">
             <div class="teams">
-              <span class="team home">${m.homeTeam}</span>
+              <span class="team home">${t(m.homeTeam)}</span>
               <div class="score-input">${scoreHtml}</div>
-              <span class="team away">${m.awayTeam}</span>
+              <span class="team away">${t(m.awayTeam)}</span>
             </div>
             <div class="match-meta">${metaHtml}</div>
           </div>`;
@@ -410,7 +410,7 @@ async function renderPredictions() {
 
       const teamOptions = (selected) =>
         `<option value="">-- kies --</option>` +
-        teams.map(t => `<option value="${t}" ${t === selected ? "selected" : ""}>${t}</option>`).join("");
+        teams.map(team => `<option value="${team}" ${team === selected ? "selected" : ""}>${t(team)}</option>`).join("");
 
       const badge = (pos, saved) => {
         if (!known || !saved) return "";
@@ -428,15 +428,15 @@ async function renderPredictions() {
           <div class="adv-pos-row">
             <span class="adv-pos-label">🥇 1e plaats</span>
             ${locked
-              ? `<span class="adv-locked-val">${saved.pos1 || "–"}</span>`
-              : `<select data-group="${group}" data-pos="pos1" ${locked ? "disabled" : ""}>${teamOptions(saved.pos1)}</select>`}
+              ? `<span class="adv-locked-val">${t(saved.pos1) || "–"}</span>`
+              : `<select data-group="${group}" data-pos="pos1">${teamOptions(saved.pos1)}</select>`}
             ${badge(1, saved.pos1)}
           </div>
           <div class="adv-pos-row">
             <span class="adv-pos-label">🥈 2e plaats</span>
             ${locked
-              ? `<span class="adv-locked-val">${saved.pos2 || "–"}</span>`
-              : `<select data-group="${group}" data-pos="pos2" ${locked ? "disabled" : ""}>${teamOptions(saved.pos2)}</select>`}
+              ? `<span class="adv-locked-val">${t(saved.pos2) || "–"}</span>`
+              : `<select data-group="${group}" data-pos="pos2">${teamOptions(saved.pos2)}</select>`}
             ${badge(2, saved.pos2)}
           </div>
         </div>
@@ -693,6 +693,169 @@ function calculateGroupStandings() {
       .map(([team]) => team);
   }
   return standings;
+}
+
+// ============================================================
+// LANDNAMEN VERTALING (Engels → Nederlands)
+// ============================================================
+const TEAM_NL = {
+  // Europa
+  "Netherlands":        "Nederland",
+  "Germany":            "Duitsland",
+  "France":             "Frankrijk",
+  "Spain":              "Spanje",
+  "Italy":              "Italië",
+  "England":            "Engeland",
+  "Belgium":            "België",
+  "Portugal":           "Portugal",
+  "Austria":            "Oostenrijk",
+  "Switzerland":        "Zwitserland",
+  "Poland":             "Polen",
+  "Denmark":            "Denemarken",
+  "Sweden":             "Zweden",
+  "Norway":             "Noorwegen",
+  "Serbia":             "Servië",
+  "Croatia":            "Kroatië",
+  "Romania":            "Roemenië",
+  "Turkey":             "Turkije",
+  "Türkiye":            "Turkije",
+  "Czech Republic":     "Tsjechië",
+  "Czechia":            "Tsjechië",
+  "Slovakia":           "Slowakije",
+  "Hungary":            "Hongarije",
+  "Ukraine":            "Oekraïne",
+  "Greece":             "Griekenland",
+  "Scotland":           "Schotland",
+  "Wales":              "Wales",
+  "Republic of Ireland":"Ierland",
+  "Ireland":            "Ierland",
+  "Albania":            "Albanië",
+  "Slovenia":           "Slovenië",
+  "Georgia":            "Georgië",
+  "Kosovo":             "Kosovo",
+  "North Macedonia":    "Noord-Macedonië",
+  "Finland":            "Finland",
+  "Iceland":            "IJsland",
+  "Bosnia and Herzegovina": "Bosnië-Herzegovina",
+  "Montenegro":         "Montenegro",
+  "Bulgaria":           "Bulgarije",
+  "Northern Ireland":   "Noord-Ierland",
+  "Luxembourg":         "Luxemburg",
+  "Belarus":            "Wit-Rusland",
+  "Estonia":            "Estland",
+  "Latvia":             "Letland",
+  "Lithuania":          "Litouwen",
+
+  // Zuid-Amerika
+  "Brazil":             "Brazilië",
+  "Argentina":          "Argentinië",
+  "Uruguay":            "Uruguay",
+  "Colombia":           "Colombia",
+  "Ecuador":            "Ecuador",
+  "Chile":              "Chili",
+  "Peru":               "Peru",
+  "Venezuela":          "Venezuela",
+  "Paraguay":           "Paraguay",
+  "Bolivia":            "Bolivia",
+
+  // Noord- en Midden-Amerika & Caraïben
+  "United States":      "Verenigde Staten",
+  "USA":                "Verenigde Staten",
+  "Canada":             "Canada",
+  "Mexico":             "Mexico",
+  "Costa Rica":         "Costa Rica",
+  "Panama":             "Panama",
+  "Honduras":           "Honduras",
+  "El Salvador":        "El Salvador",
+  "Jamaica":            "Jamaica",
+  "Cuba":               "Cuba",
+  "Trinidad and Tobago":"Trinidad en Tobago",
+  "Curaçao":            "Curaçao",
+  "Curacao":            "Curaçao",
+  "Guatemala":          "Guatemala",
+  "Haiti":              "Haïti",
+
+  // Afrika
+  "Morocco":            "Marokko",
+  "Senegal":            "Senegal",
+  "Nigeria":            "Nigeria",
+  "Ivory Coast":        "Ivoorkust",
+  "Côte d'Ivoire":      "Ivoorkust",
+  "Ghana":              "Ghana",
+  "Cameroon":           "Kameroen",
+  "Egypt":              "Egypte",
+  "Algeria":            "Algerije",
+  "Tunisia":            "Tunesië",
+  "South Africa":       "Zuid-Afrika",
+  "Mali":               "Mali",
+  "Burkina Faso":       "Burkina Faso",
+  "DR Congo":           "DR Congo",
+  "Zambia":             "Zambia",
+  "Tanzania":           "Tanzania",
+  "Angola":             "Angola",
+  "Mozambique":         "Mozambique",
+  "Uganda":             "Oeganda",
+  "Benin":              "Benin",
+  "Congo":              "Congo",
+  "Gabon":              "Gabon",
+  "Guinea":             "Guinee",
+  "Cape Verde":         "Kaapverdië",
+  "Equatorial Guinea":  "Equatoriaal-Guinea",
+  "Comoros":            "Comoren",
+  "Libya":              "Libië",
+  "Sudan":              "Soedan",
+  "Kenya":              "Kenia",
+  "Ethiopia":           "Ethiopië",
+  "Rwanda":             "Rwanda",
+  "Zimbabwe":           "Zimbabwe",
+  "Namibia":            "Namibië",
+  "Mauritania":         "Mauritanië",
+
+  // Azië & Oceanië
+  "Japan":              "Japan",
+  "South Korea":        "Zuid-Korea",
+  "Korea Republic":     "Zuid-Korea",
+  "Australia":          "Australië",
+  "Saudi Arabia":       "Saoedi-Arabië",
+  "Iran":               "Iran",
+  "Qatar":              "Qatar",
+  "Iraq":               "Irak",
+  "Jordan":             "Jordanië",
+  "Oman":               "Oman",
+  "Uzbekistan":         "Oezbekistan",
+  "China":              "China",
+  "China PR":           "China",
+  "Indonesia":          "Indonesië",
+  "New Zealand":        "Nieuw-Zeeland",
+  "United Arab Emirates": "Verenigde Arabische Emiraten",
+  "UAE":                "VAE",
+  "Bahrain":            "Bahrein",
+  "Kuwait":             "Koeweit",
+  "Palestine":          "Palestina",
+  "Syria":              "Syrië",
+  "Thailand":           "Thailand",
+  "Vietnam":            "Vietnam",
+  "India":              "India",
+  "Philippines":        "Filipijnen",
+  "Malaysia":           "Maleisië",
+  "Myanmar":            "Myanmar",
+  "Tajikistan":         "Tadzjikistan",
+  "Kyrgyzstan":         "Kirgizië",
+  "North Korea":        "Noord-Korea",
+  "Fiji":               "Fiji",
+  "Papua New Guinea":   "Papoea-Nieuw-Guinea",
+  "Solomon Islands":    "Salomonseilanden",
+  "New Caledonia":      "Nieuw-Caledonië",
+
+  // Midden-Oosten
+  "Lebanon":            "Libanon",
+  "Israel":             "Israël",
+  "Turkey":             "Turkije",
+};
+
+function t(name) {
+  if (!name) return name;
+  return TEAM_NL[name] ?? name;
 }
 
 const STAGE_LABEL = {
