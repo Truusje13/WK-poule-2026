@@ -385,11 +385,81 @@ async function renderPredictions() {
   }
 
 
+  // Doorkomst-overzicht (na groepsfase, vóór opslaan)
+  html += `
+    <div class="stage-header">Jouw voorspelde doorkomst naar de Last 32</div>
+    <div class="predicted-advancement-intro">
+      Op basis van jouw ingevulde groepsscores komen deze landen door.
+      Dit wordt automatisch bijgewerkt terwijl je scores invult.
+    </div>
+    <div id="predicted-advancement-grid" class="predicted-grid"></div>`;
+
   if (!locked) {
     html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
   }
 
   container.innerHTML = html;
+
+  // Initialiseer het doorkomst-overzicht en koppel realtime updates
+  updatePredictedAdvancement();
+  container.querySelectorAll("input[type=number]").forEach(input => {
+    input.addEventListener("input", updatePredictedAdvancement);
+  });
+}
+
+function updatePredictedAdvancement() {
+  const grid = document.getElementById("predicted-advancement-grid");
+  if (!grid) return;
+
+  // Lees huidige invoer uit de formuliervelden
+  const currentPreds = {};
+  document.querySelectorAll("#predictions-container input[type=number]").forEach(input => {
+    const matchId = input.dataset.match;
+    const side = input.dataset.side;
+    const val = input.value.trim();
+    if (val !== "") {
+      if (!currentPreds[matchId]) currentPreds[matchId] = {};
+      currentPreds[matchId][side] = parseInt(val);
+    }
+  });
+
+  const predicted = calculatePredictedGroupStandings(currentPreds);
+  const actual    = getActuallyAdvanced();
+  const sortedGroups = Object.keys(predicted).sort();
+
+  if (sortedGroups.length === 0) {
+    grid.innerHTML = `<p class="predicted-empty">Vul groepsscores in om de doorkomst te zien.</p>`;
+    return;
+  }
+
+  let html = "";
+  for (const group of sortedGroups) {
+    const label = group.replace("GROUP_", "Groep ");
+    const top2  = predicted[group].slice(0, 2);
+
+    html += `<div class="predicted-group">
+      <div class="predicted-group-label">${label}</div>`;
+
+    for (let i = 0; i < 2; i++) {
+      const team = top2[i];
+      if (!team) {
+        html += `<div class="predicted-team empty">– nog niet bepaald</div>`;
+      } else {
+        const pos = i === 0 ? "🥇" : "🥈";
+        // Toon groen vinkje als het WK al bezig is en het klopt
+        const correct = actual.size > 0 && actual.has(team);
+        const wrong   = actual.size > 0 && !actual.has(team);
+        html += `<div class="predicted-team ${correct ? "correct" : wrong ? "wrong" : ""}">
+          <span class="pred-pos">${pos}</span>
+          <span class="pred-name">${t(team)}</span>
+          ${correct ? `<span class="pred-check">✅</span>` : wrong ? `<span class="pred-check">✗</span>` : ""}
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+
+  grid.innerHTML = html;
 }
 
 async function savePredictions() {

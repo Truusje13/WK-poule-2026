@@ -584,6 +584,65 @@ main {
 .adv-good    { background: #fff3cd; color: #856404; }
 .adv-wrong   { background: #fde8e8; color: #922; }
 
+/* ===== VOORSPELDE DOORKOMST ===== */
+.predicted-advancement-intro {
+  background: var(--orange-pale);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+  color: var(--dark-mid);
+  margin-bottom: 0.75rem;
+}
+
+.predicted-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.predicted-group {
+  background: white;
+  border-radius: var(--radius);
+  padding: 0.65rem 0.75rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+}
+
+.predicted-group-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--orange-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.predicted-team {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0;
+  font-size: 0.84rem;
+  border-bottom: 1px solid #f5f0ed;
+}
+
+.predicted-team:last-child { border-bottom: none; }
+.predicted-team.empty { color: #bbb; font-style: italic; }
+.predicted-team.correct .pred-name { color: #155724; font-weight: 600; }
+.predicted-team.wrong .pred-name { color: #922; text-decoration: line-through; }
+
+.pred-pos { font-size: 0.85rem; flex-shrink: 0; }
+.pred-name { flex: 1; }
+.pred-check { font-size: 0.75rem; flex-shrink: 0; }
+
+.predicted-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #bbb;
+  font-size: 0.88rem;
+  padding: 1rem;
+}
+
 /* ===== BEHEER ===== */
 .admin-btn {
   background: rgba(255,255,255,0.15);
