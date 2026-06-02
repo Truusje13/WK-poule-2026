@@ -384,65 +384,6 @@ async function renderPredictions() {
     }
   }
 
-  // ── Doorkomst groepsfase ──
-  const teamsPerGroup   = getTeamsPerGroup();
-  const advancedActual  = getActuallyAdvanced();
-  const actualStandings = calculateGroupStandings();
-  const advancedSnap    = await get(ref(db, `advancement/${currentUser.id}`));
-  const savedAdvancement = advancedSnap.exists() ? advancedSnap.val() : {};
-  const sortedGroupKeys  = Object.keys(teamsPerGroup).sort();
-
-  if (sortedGroupKeys.length > 0) {
-    html += `<div class="stage-header">Welke landen komen door uit de groepsfase?</div>
-    <div class="advancement-intro">
-      Kies per groep de <strong>1e en 2e plaats</strong>.
-      <strong>${SCORING.advancement} punten</strong> per correct land •
-      <strong>+${SCORING.position} extra</strong> als ook de positie klopt.
-    </div>`;
-
-    for (const group of sortedGroupKeys) {
-      const teams      = teamsPerGroup[group];
-      const groupLabel = group.replace("GROUP_", "Groep ");
-      const saved      = savedAdvancement[group] || { pos1: "", pos2: "" };
-      const actual1    = actualStandings[group]?.[0] ?? null;
-      const actual2    = actualStandings[group]?.[1] ?? null;
-      const known      = advancedActual.size > 0;
-
-      const teamOptions = (selected) =>
-        `<option value="">-- kies --</option>` +
-        teams.map(team => `<option value="${team}" ${team === selected ? "selected" : ""}>${t(team)}</option>`).join("");
-
-      const badge = (pos, saved) => {
-        if (!known || !saved) return "";
-        const actual = pos === 1 ? actual1 : actual2;
-        const advanced = advancedActual.has(saved);
-        const rightPos = saved === actual;
-        if (advanced && rightPos) return `<span class="adv-badge adv-correct">✅ ${SCORING.advancement + SCORING.position}pts</span>`;
-        if (advanced)             return `<span class="adv-badge adv-good">✓ ${SCORING.advancement}pts</span>`;
-        return `<span class="adv-badge adv-wrong">✗</span>`;
-      };
-
-      html += `<div class="group-section">
-        <h3>${groupLabel}</h3>
-        <div class="advancement-pos">
-          <div class="adv-pos-row">
-            <span class="adv-pos-label">🥇 1e plaats</span>
-            ${locked
-              ? `<span class="adv-locked-val">${t(saved.pos1) || "–"}</span>`
-              : `<select data-group="${group}" data-pos="pos1">${teamOptions(saved.pos1)}</select>`}
-            ${badge(1, saved.pos1)}
-          </div>
-          <div class="adv-pos-row">
-            <span class="adv-pos-label">🥈 2e plaats</span>
-            ${locked
-              ? `<span class="adv-locked-val">${t(saved.pos2) || "–"}</span>`
-              : `<select data-group="${group}" data-pos="pos2">${teamOptions(saved.pos2)}</select>`}
-            ${badge(2, saved.pos2)}
-          </div>
-        </div>
-      </div>`;
-    }
-  }
 
   if (!locked) {
     html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
@@ -469,21 +410,8 @@ async function savePredictions() {
     }
   }
 
-  // Doorkomst opslaan (pos1 / pos2 per groep)
-  const advData = {};
-  const selects = document.querySelectorAll("#predictions-container select[data-group]");
-  for (const sel of selects) {
-    const group = sel.dataset.group;
-    const pos   = sel.dataset.pos;
-    if (!advData[group]) advData[group] = { pos1: "", pos2: "" };
-    advData[group][pos] = sel.value;
-  }
-
   try {
-    await Promise.all([
-      set(ref(db, `predictions/${currentUser.id}`), data),
-      set(ref(db, `advancement/${currentUser.id}`), advData)
-    ]);
+    await set(ref(db, `predictions/${currentUser.id}`), data);
     await recalculateStandings(currentUser.id);
     btn.textContent = "✅ Opgeslagen!";
     setTimeout(() => {
@@ -509,15 +437,13 @@ async function recalculateAllStandings() {
 }
 
 async function recalculateStandings(participantId) {
-  const [predSnap, partSnap, advSnap] = await Promise.all([
+  const [predSnap, partSnap] = await Promise.all([
     get(ref(db, `predictions/${participantId}`)),
-    get(ref(db, `participants/${participantId}`)),
-    get(ref(db, `advancement/${participantId}`))
+    get(ref(db, `participants/${participantId}`))
   ]);
   if (!partSnap.exists()) return;
 
   const preds = predSnap.exists() ? predSnap.val() : {};
-  const adv   = advSnap.exists()  ? advSnap.val()  : {};
   const name  = partSnap.val().name;
 
   let points = 0, exactCount = 0, outcomeCount = 0, advancementPts = 0, roundBonusPts = 0;
@@ -551,24 +477,30 @@ async function recalculateStandings(participantId) {
   }
 
   // ── 2. Doorkomst groepsfase ──
-  const actualAdvanced  = getActuallyAdvanced();
-  const actualStandings = calculateGroupStandings();
+  // Berekend automatisch uit de voorspelde scores
+  const actualAdvanced    = getActuallyAdvanced();
+  const actualStandings   = calculateGroupStandings();
+  const predictedStandings = calculatePredictedGroupStandings(preds);
 
   if (actualAdvanced.size > 0) {
-    for (const [group, saved] of Object.entries(adv)) {
+    for (const [group, predictedOrder] of Object.entries(predictedStandings)) {
       const actual1 = actualStandings[group]?.[0] ?? null;
       const actual2 = actualStandings[group]?.[1] ?? null;
 
-      for (const [posKey, team] of Object.entries(saved)) {
-        if (!team || !actualAdvanced.has(team)) continue;
+      // Top 2 uit de voorspelde stand
+      const pred1 = predictedOrder[0] ?? null;
+      const pred2 = predictedOrder[1] ?? null;
+
+      for (const [idx, predTeam] of [[0, pred1], [1, pred2]]) {
+        if (!predTeam || !actualAdvanced.has(predTeam)) continue;
         // Correct doorgekomt
-        points        += SCORING.advancement;
+        points         += SCORING.advancement;
         advancementPts += SCORING.advancement;
-        // Bonus voor juiste positie
-        const predPos = posKey === "pos1" ? 1 : 2;
-        const actualPos = team === actual1 ? 1 : team === actual2 ? 2 : null;
+        // Bonus voor juiste positie (1e of 2e)
+        const predPos   = idx === 0 ? 1 : 2;
+        const actualPos = predTeam === actual1 ? 1 : predTeam === actual2 ? 2 : null;
         if (actualPos && predPos === actualPos) {
-          points        += SCORING.position;
+          points         += SCORING.position;
           advancementPts += SCORING.position;
         }
       }
@@ -667,7 +599,37 @@ function getActuallyAdvanced() {
   return advanced;
 }
 
-// Bereken de werkelijke groepsstand op basis van resultaten (voor positiebonus)
+// Bereken de VOORSPELDE groepsstand op basis van ingevulde scores
+function calculatePredictedGroupStandings(preds) {
+  const groupStats = {};
+  for (const [matchId, m] of Object.entries(matches)) {
+    if (m.stage !== "GROUP_STAGE") continue;
+    const pred = preds[matchId];
+    if (!pred || pred.home === "" || pred.home === undefined) continue;
+    const predH = parseInt(pred.home), predA = parseInt(pred.away);
+    if (isNaN(predH) || isNaN(predA)) continue;
+    const g = m.group || "UNKNOWN";
+    if (!groupStats[g]) groupStats[g] = {};
+    for (const [team, isHome] of [[m.homeTeam, true], [m.awayTeam, false]]) {
+      if (!groupStats[g][team]) groupStats[g][team] = { pts: 0, gd: 0, gf: 0 };
+      const scored   = isHome ? predH : predA;
+      const conceded = isHome ? predA : predH;
+      groupStats[g][team].gf += scored;
+      groupStats[g][team].gd += scored - conceded;
+      if (scored > conceded)        groupStats[g][team].pts += 3;
+      else if (scored === conceded) groupStats[g][team].pts += 1;
+    }
+  }
+  const standings = {};
+  for (const [g, teams] of Object.entries(groupStats)) {
+    standings[g] = Object.entries(teams)
+      .sort(([,a],[,b]) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+      .map(([team]) => team);
+  }
+  return standings;
+}
+
+// Bereken de WERKELIJKE groepsstand op basis van resultaten (voor positiebonus)
 function calculateGroupStandings() {
   const groupStats = {};
   for (const m of Object.values(matches)) {
