@@ -595,6 +595,7 @@ async function deleteParticipant(id, name) {
 // ============================================================
 
 window.showView = showView;
+window.renderPredictions = renderPredictions;
 window.joinPoule = joinPoule;
 window.logout = logout;
 window.savePredictions = savePredictions;

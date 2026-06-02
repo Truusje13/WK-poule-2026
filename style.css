@@ -411,6 +411,116 @@ main {
 
 .pts-cell { font-weight: 800; font-size: 1.05rem; }
 
+/* ===== REGELS ===== */
+.rules-card {
+  max-width: 680px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.rules-card h2 {
+  font-size: 1.5rem;
+  color: var(--orange-dark);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 3px solid var(--orange);
+}
+
+.rules-section {
+  margin-bottom: 1.5rem;
+}
+
+.rules-section h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 0.6rem;
+}
+
+.rules-section p {
+  font-size: 0.92rem;
+  color: #555;
+  line-height: 1.6;
+}
+
+.rules-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.rules-table thead {
+  background: var(--orange);
+  color: white;
+}
+
+.rules-table th {
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+}
+
+.rules-table td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.rules-table small {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.rules-table td.pts {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--orange-dark);
+  vertical-align: middle;
+}
+
+.rules-table td.pts.zero {
+  color: #ccc;
+}
+
+.examples {
+  background: var(--orange-pale);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.ex-match {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.ex-row {
+  font-size: 0.88rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  margin-bottom: 0.3rem;
+}
+
+.ex-row.good3 { background: #d4edda; color: #155724; }
+.ex-row.good1 { background: #fff3cd; color: #856404; }
+.ex-row.bad   { background: #fde8e8; color: #922; }
+
+.btn-rules-link {
+  background: none;
+  border: none;
+  color: var(--orange-dark);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0;
+  text-decoration: underline;
+}
+
 /* ===== BEHEER ===== */
 .admin-btn {
   background: rgba(255,255,255,0.15);

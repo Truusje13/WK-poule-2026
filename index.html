@@ -14,6 +14,7 @@
         <span id="user-name"></span>
         <button onclick="showView('predictions')">Voorspellingen</button>
         <button onclick="showView('standings')">Stand</button>
+        <button onclick="showView('rules')">📋 Regels</button>
         <button onclick="showView('admin')" class="admin-btn">⚙️ Beheer</button>
         <button onclick="logout()" class="logout-btn">Uitloggen</button>
       </nav>
@@ -21,6 +22,72 @@
   </header>
 
   <main>
+    <!-- Regels -->
+    <div id="view-rules" class="view hidden">
+      <div class="rules-card">
+        <h2>📋 Spelregels & puntentelling</h2>
+
+        <div class="rules-section">
+          <h3>🎯 Hoe doe je mee?</h3>
+          <p>Vul je naam in op de startpagina en voorspel de uitslag van elke wedstrijd op het WK 2026. Je kunt voorspellingen invullen en aanpassen tot de eerste wedstrijd begint op <strong>11 juni 2026</strong>. Daarna zijn je voorspellingen definitief.</p>
+        </div>
+
+        <div class="rules-section">
+          <h3>🏆 Puntentelling</h3>
+          <table class="rules-table">
+            <thead>
+              <tr><th>Voorspelling</th><th>Punten</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>✅ <strong>Exacte uitslag</strong><br><small>Je voorspelt precies de goede score, bv. 2–1</small></td>
+                <td class="pts">3</td>
+              </tr>
+              <tr>
+                <td>✓ <strong>Juiste winnaar of gelijkspel</strong><br><small>Je hebt de goede uitkomst (W/G/V), maar niet de exacte score</small></td>
+                <td class="pts">1</td>
+              </tr>
+              <tr>
+                <td>✗ <strong>Fout</strong><br><small>De uitkomst klopt niet</small></td>
+                <td class="pts zero">0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="rules-section">
+          <h3>📝 Voorbeelden</h3>
+          <div class="examples">
+            <div class="example">
+              <div class="ex-match">Nederland – Argentinië</div>
+              <div class="ex-row">
+                <span>Werkelijke uitslag: <strong>2–1</strong></span>
+              </div>
+              <div class="ex-row good3">Jij voorspelde 2–1 → <strong>3 punten</strong> (exact)</div>
+              <div class="ex-row good1">Jij voorspelde 3–1 → <strong>1 punt</strong> (Nederland wint, maar score klopt niet)</div>
+              <div class="ex-row bad">Jij voorspelde 1–2 → <strong>0 punten</strong> (Argentinië wint in voorspelling)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rules-section">
+          <h3>📊 Klassement</h3>
+          <p>De deelnemer met de meeste punten wint de poule. Bij gelijke punten is het aantal <em>exacte uitslagen</em> doorslaggevend.</p>
+        </div>
+
+        <div class="rules-section">
+          <h3>🔄 Automatische bijwerking</h3>
+          <p>Na elke gespeelde wedstrijd worden de punten automatisch berekend en het klassement bijgewerkt. Je hoeft zelf niets te doen.</p>
+        </div>
+
+        <div style="text-align:center; margin-top:1.5rem">
+          <button class="btn-primary" onclick="showView('join')" style="padding: 0.75rem 2rem; font-size:1rem">
+            ⚽ Meedoen!
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Meedoen -->
     <div id="view-join" class="view">
       <div class="card join-card">
@@ -37,6 +104,9 @@
           <p><strong>Puntentelling:</strong></p>
           <p>✅ Exacte uitslag: <strong>3 punten</strong></p>
           <p>✓ Juiste winnaar of gelijkspel: <strong>1 punt</strong></p>
+          <p style="margin-top:0.6rem">
+            <button onclick="showView('rules')" class="btn-rules-link">📋 Lees alle spelregels →</button>
+          </p>
         </div>
       </div>
     </div>
