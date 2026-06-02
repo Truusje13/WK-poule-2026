@@ -381,16 +381,29 @@ async function renderPredictions() {
       }
 
       html += "</div>";
+
+      // Na elke knockoutronde een doorkomst-blok invoegen
+      if (stage !== "GROUP_STAGE" && stage !== "FINAL" && stage !== "THIRD_PLACE") {
+        const nextIdx = STAGE_ORDER.indexOf(stage) + 1;
+        const nextStage = STAGE_ORDER[nextIdx];
+        if (nextStage) {
+          html += `<div class="predicted-knockout-block">
+            <div class="predicted-ko-title">↓ Voorspelde doorkomst naar de ${STAGE_LABEL[nextStage] ?? nextStage}</div>
+            <div class="predicted-ko-teams" id="adv-teams-${stage}">
+              <span class="predicted-empty">Vul scores in om de doorkomst te zien.</span>
+            </div>
+          </div>`;
+        }
+      }
     }
   }
 
-
-  // Doorkomst-overzicht (na groepsfase, vóór opslaan)
+  // Groepsfase doorkomst-overzicht
   html += `
     <div class="stage-header">Jouw voorspelde doorkomst naar de Last 32</div>
     <div class="predicted-advancement-intro">
       Op basis van jouw ingevulde groepsscores komen deze landen door.
-      Dit wordt automatisch bijgewerkt terwijl je scores invult.
+      Wordt automatisch bijgewerkt terwijl je scores invult.
     </div>
     <div id="predicted-advancement-grid" class="predicted-grid"></div>`;
 
@@ -400,66 +413,159 @@ async function renderPredictions() {
 
   container.innerHTML = html;
 
-  // Initialiseer het doorkomst-overzicht en koppel realtime updates
+  // Initialiseer het doorkomst-overzicht en koppel realtime updates + auto-opslaan
   updatePredictedAdvancement();
+
+  let autoSaveTimer = null;
   container.querySelectorAll("input[type=number]").forEach(input => {
-    input.addEventListener("input", updatePredictedAdvancement);
+    input.addEventListener("input", () => {
+      updatePredictedAdvancement();
+      // Auto-opslaan: 2 seconden na de laatste invoer
+      clearTimeout(autoSaveTimer);
+      showAutoSaveStatus("⏳ Wordt opgeslagen...");
+      autoSaveTimer = setTimeout(() => autoSave(), 2000);
+    });
   });
 }
 
-function updatePredictedAdvancement() {
-  const grid = document.getElementById("predicted-advancement-grid");
-  if (!grid) return;
+function showAutoSaveStatus(msg) {
+  const btn = document.getElementById("save-btn");
+  if (btn) btn.textContent = msg;
+}
 
-  // Lees huidige invoer uit de formuliervelden
+async function autoSave() {
+  const inputs = document.querySelectorAll("#predictions-container input[type=number]");
+  if (inputs.length === 0) return;
+
+  const data = {};
+  for (const input of inputs) {
+    const matchId = input.dataset.match;
+    const side    = input.dataset.side;
+    const val     = input.value.trim();
+    if (val !== "") {
+      if (!data[matchId]) data[matchId] = {};
+      data[matchId][side] = parseInt(val);
+    }
+  }
+
+  try {
+    await set(ref(db, `predictions/${currentUser.id}`), data);
+    await recalculateStandings(currentUser.id);
+    showAutoSaveStatus("✅ Automatisch opgeslagen");
+    setTimeout(() => showAutoSaveStatus("💾 Voorspellingen opslaan"), 3000);
+  } catch (e) {
+    showAutoSaveStatus("❌ Opslaan mislukt — probeer handmatig");
+    console.error(e);
+  }
+}
+
+function readCurrentPreds() {
   const currentPreds = {};
   document.querySelectorAll("#predictions-container input[type=number]").forEach(input => {
     const matchId = input.dataset.match;
-    const side = input.dataset.side;
-    const val = input.value.trim();
+    const side    = input.dataset.side;
+    const val     = input.value.trim();
     if (val !== "") {
       if (!currentPreds[matchId]) currentPreds[matchId] = {};
       currentPreds[matchId][side] = parseInt(val);
     }
   });
+  return currentPreds;
+}
 
-  const predicted = calculatePredictedGroupStandings(currentPreds);
-  const actual    = getActuallyAdvanced();
-  const sortedGroups = Object.keys(predicted).sort();
+function updatePredictedAdvancement() {
+  const currentPreds  = readCurrentPreds();
+  const actual        = getActuallyAdvanced();
 
-  if (sortedGroups.length === 0) {
-    grid.innerHTML = `<p class="predicted-empty">Vul groepsscores in om de doorkomst te zien.</p>`;
-    return;
+  // ── Groepsfase: top 2 per groep ──
+  const grid = document.getElementById("predicted-advancement-grid");
+  if (grid) {
+    const predicted    = calculatePredictedGroupStandings(currentPreds);
+    const sortedGroups = Object.keys(predicted).sort();
+
+    if (sortedGroups.length === 0) {
+      grid.innerHTML = `<p class="predicted-empty">Vul groepsscores in om de doorkomst te zien.</p>`;
+    } else {
+      let html = "";
+      for (const group of sortedGroups) {
+        const label = group.replace("GROUP_", "Groep ");
+        const top2  = predicted[group].slice(0, 2);
+        html += `<div class="predicted-group"><div class="predicted-group-label">${label}</div>`;
+        for (let i = 0; i < 2; i++) {
+          const team    = top2[i];
+          const pos     = i === 0 ? "🥇" : "🥈";
+          const correct = actual.size > 0 && team && actual.has(team);
+          const wrong   = actual.size > 0 && team && !actual.has(team);
+          html += team
+            ? `<div class="predicted-team ${correct ? "correct" : wrong ? "wrong" : ""}">
+                <span class="pred-pos">${pos}</span>
+                <span class="pred-name">${t(team)}</span>
+                ${correct ? `<span class="pred-check">✅</span>` : wrong ? `<span class="pred-check">✗</span>` : ""}
+               </div>`
+            : `<div class="predicted-team empty">– nog niet bepaald</div>`;
+        }
+        html += `</div>`;
+      }
+      grid.innerHTML = html;
+    }
   }
 
-  let html = "";
-  for (const group of sortedGroups) {
-    const label = group.replace("GROUP_", "Groep ");
-    const top2  = predicted[group].slice(0, 2);
+  // ── Knockoutronden: winnaar per wedstrijd ──
+  const knockoutStages = ["LAST_32", "LAST_16", "QUARTER_FINALS", "SEMI_FINALS"];
+  for (const stage of knockoutStages) {
+    const container = document.getElementById(`adv-teams-${stage}`);
+    if (!container) continue;
 
-    html += `<div class="predicted-group">
-      <div class="predicted-group-label">${label}</div>`;
+    // Haal alle wedstrijden van deze ronde op
+    const stageMatches = Object.entries(matches)
+      .filter(([, m]) => m.stage === stage)
+      .sort(([, a], [, b]) => new Date(a.utcDate) - new Date(b.utcDate));
 
-    for (let i = 0; i < 2; i++) {
-      const team = top2[i];
-      if (!team) {
-        html += `<div class="predicted-team empty">– nog niet bepaald</div>`;
+    if (stageMatches.length === 0) { continue; }
+
+    // Check of teams al bekend zijn (niet null)
+    const teamsKnown = stageMatches.some(([, m]) => m.homeTeam && m.awayTeam);
+    if (!teamsKnown) {
+      container.innerHTML = `<span class="predicted-empty">Wordt ingevuld nadat de vorige ronde gespeeld is.</span>`;
+      continue;
+    }
+
+    const winners = [];
+    for (const [matchId, m] of stageMatches) {
+      if (!m.homeTeam || !m.awayTeam) continue;
+      const pred = currentPreds[matchId];
+      if (!pred || pred.home === undefined || pred.away === undefined) {
+        winners.push({ team: null, label: `${t(m.homeTeam)} vs ${t(m.awayTeam)}` });
+        continue;
+      }
+      const ph = parseInt(pred.home), pa = parseInt(pred.away);
+      if (isNaN(ph) || isNaN(pa) || ph === pa) {
+        // Gelijkspel in knockout = geen winnaar bepaald
+        winners.push({ team: null, label: `${t(m.homeTeam)} vs ${t(m.awayTeam)} (gelijkspel?)` });
       } else {
-        const pos = i === 0 ? "🥇" : "🥈";
-        // Toon groen vinkje als het WK al bezig is en het klopt
-        const correct = actual.size > 0 && actual.has(team);
-        const wrong   = actual.size > 0 && !actual.has(team);
-        html += `<div class="predicted-team ${correct ? "correct" : wrong ? "wrong" : ""}">
-          <span class="pred-pos">${pos}</span>
-          <span class="pred-name">${t(team)}</span>
-          ${correct ? `<span class="pred-check">✅</span>` : wrong ? `<span class="pred-check">✗</span>` : ""}
-        </div>`;
+        const winner = ph > pa ? m.homeTeam : m.awayTeam;
+        // Vergelijk met werkelijke uitslag als die er is
+        const correct = m.status === "FINISHED" && m.homeScore !== null
+          ? (m.homeScore > m.awayScore ? m.homeTeam : m.awayTeam) === winner
+          : null;
+        winners.push({ team: winner, correct });
+      }
+    }
+
+    let html = `<div class="predicted-ko-list">`;
+    for (const { team, label, correct } of winners) {
+      if (!team) {
+        html += `<span class="pred-ko-team empty">${label ?? "– vul score in"}</span>`;
+      } else {
+        const cls = correct === true ? "correct" : correct === false ? "wrong" : "";
+        html += `<span class="pred-ko-team ${cls}">
+          ${correct === true ? "✅" : correct === false ? "✗" : "→"} ${t(team)}
+        </span>`;
       }
     }
     html += `</div>`;
+    container.innerHTML = html;
   }
-
-  grid.innerHTML = html;
 }
 
 async function savePredictions() {
