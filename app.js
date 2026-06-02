@@ -25,7 +25,7 @@ const ADMIN_PASSWORD = "oranje2026";
 // INSTELLINGEN (hoef je normaal niet aan te passen)
 // ============================================================
 
-const SCORING = { exact: 3, outcome: 1 };
+const SCORING = { exact: 3, outcome: 1, advancement: 2 }; // 2 pts per correct doorgekomt land
 const DEADLINE = new Date("2026-06-11T17:00:00Z"); // Eerste wedstrijd WK 2026
 const CACHE_KEY = "poule_matches_v1";
 const RESULTS_CACHE_MINUTES = 30;
@@ -371,6 +371,56 @@ async function renderPredictions() {
     }
   }
 
+  // ── Doorkomst-sectie ──
+  const teamsPerGroup = getTeamsPerGroup();
+  const advancedActual = getActuallyAdvanced();
+  const advancedSnap = await get(ref(db, `advancement/${currentUser.id}`));
+  const savedAdvancement = advancedSnap.exists() ? advancedSnap.val() : {};
+
+  const sortedGroupKeys = Object.keys(teamsPerGroup).sort();
+
+  if (sortedGroupKeys.length > 0) {
+    html += `<div class="stage-header">Welke landen komen door uit de groepsfase?</div>
+    <div class="advancement-intro">
+      Kies per groep de <strong>2 landen</strong> die jij denkt dat doorgaan naar de volgende ronde.
+      Je krijgt <strong>${SCORING.advancement} punten</strong> per land dat je goed hebt.
+    </div>`;
+
+    for (const group of sortedGroupKeys) {
+      const teams = teamsPerGroup[group];
+      const groupLabel = group.replace("GROUP_", "Groep ");
+      const savedForGroup = savedAdvancement[group] || [];
+
+      html += `<div class="group-section">
+        <h3>${groupLabel} — kies 2 landen</h3>
+        <div class="advancement-grid" data-group="${group}">`;
+
+      for (const team of teams) {
+        const isSelected = savedForGroup.includes(team);
+        const isAdvanced = advancedActual.has(team);
+        const wasSelected = savedForGroup.includes(team);
+        const known = advancedActual.size > 0;
+
+        let badgeHtml = "";
+        if (known) {
+          if (isAdvanced && wasSelected) badgeHtml = `<span class="adv-badge adv-correct">✅ +${SCORING.advancement}pts</span>`;
+          else if (isAdvanced) badgeHtml = `<span class="adv-badge adv-missed">➡️ doorgekomen</span>`;
+          else if (wasSelected) badgeHtml = `<span class="adv-badge adv-wrong">✗ niet door</span>`;
+        }
+
+        html += `<label class="adv-team ${isSelected ? "selected" : ""} ${locked ? "locked" : ""}">
+          <input type="checkbox" data-group="${group}" data-team="${team}"
+            ${isSelected ? "checked" : ""} ${locked ? "disabled" : ""}
+            onchange="updateAdvancementSelection(this)" />
+          <span class="adv-team-name">${team}</span>
+          ${badgeHtml}
+        </label>`;
+      }
+
+      html += `</div></div>`;
+    }
+  }
+
   if (!locked) {
     html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
   }
@@ -383,9 +433,9 @@ async function savePredictions() {
   btn.disabled = true;
   btn.textContent = "Opslaan...";
 
+  // Scores opslaan
   const inputs = document.querySelectorAll("#predictions-container input[type=number]");
   const data = {};
-
   for (const input of inputs) {
     const matchId = input.dataset.match;
     const side = input.dataset.side;
@@ -396,8 +446,23 @@ async function savePredictions() {
     }
   }
 
+  // Doorkomst opslaan — max 2 per groep afdwingen
+  const advData = {};
+  const checkboxes = document.querySelectorAll("#predictions-container input[type=checkbox]");
+  for (const cb of checkboxes) {
+    const group = cb.dataset.group;
+    const team = cb.dataset.team;
+    if (cb.checked) {
+      if (!advData[group]) advData[group] = [];
+      advData[group].push(team);
+    }
+  }
+
   try {
-    await set(ref(db, `predictions/${currentUser.id}`), data);
+    await Promise.all([
+      set(ref(db, `predictions/${currentUser.id}`), data),
+      set(ref(db, `advancement/${currentUser.id}`), advData)
+    ]);
     await recalculateStandings(currentUser.id);
     btn.textContent = "✅ Opgeslagen!";
     setTimeout(() => {
@@ -411,6 +476,21 @@ async function savePredictions() {
   }
 }
 
+// Zorg dat er maximaal 2 landen per groep geselecteerd kunnen worden
+function updateAdvancementSelection(checkbox) {
+  const group = checkbox.dataset.group;
+  const allInGroup = document.querySelectorAll(`input[type=checkbox][data-group="${group}"]`);
+  const checked = [...allInGroup].filter(c => c.checked);
+  if (checked.length > 2) {
+    checkbox.checked = false;
+    return;
+  }
+  // Update visuele staat
+  allInGroup.forEach(cb => {
+    cb.closest(".adv-team").classList.toggle("selected", cb.checked);
+  });
+}
+
 // ============================================================
 // STAND BEREKENEN
 // ============================================================
@@ -422,16 +502,20 @@ async function recalculateAllStandings() {
 }
 
 async function recalculateStandings(participantId) {
-  const [predSnap, partSnap] = await Promise.all([
+  const [predSnap, partSnap, advSnap] = await Promise.all([
     get(ref(db, `predictions/${participantId}`)),
-    get(ref(db, `participants/${participantId}`))
+    get(ref(db, `participants/${participantId}`)),
+    get(ref(db, `advancement/${participantId}`))
   ]);
   if (!partSnap.exists()) return;
 
   const preds = predSnap.exists() ? predSnap.val() : {};
-  const name = partSnap.val().name;
-  let points = 0, exactCount = 0, outcomeCount = 0;
+  const adv   = advSnap.exists()  ? advSnap.val()  : {};
+  const name  = partSnap.val().name;
 
+  let points = 0, exactCount = 0, outcomeCount = 0, advancementCount = 0;
+
+  // Wedstrijd-punten
   for (const [matchId, m] of Object.entries(matches)) {
     const pts = calcPoints(m, preds[matchId]);
     if (pts === null) continue;
@@ -440,8 +524,21 @@ async function recalculateStandings(participantId) {
     else if (pts === SCORING.outcome) outcomeCount++;
   }
 
+  // Doorkomst-punten (alleen als LAST_32 bekend is)
+  const actualAdvanced = getActuallyAdvanced();
+  if (actualAdvanced.size > 0) {
+    for (const teams of Object.values(adv)) {
+      for (const team of (teams || [])) {
+        if (actualAdvanced.has(team)) {
+          points += SCORING.advancement;
+          advancementCount++;
+        }
+      }
+    }
+  }
+
   await set(ref(db, `standings/${participantId}`), {
-    name, points, exactCount, outcomeCount, updatedAt: Date.now()
+    name, points, exactCount, outcomeCount, advancementCount, updatedAt: Date.now()
   });
 }
 
@@ -475,6 +572,7 @@ function renderStandings() {
           <th title="Totaal punten">Punten</th>
           <th title="Exacte scores">✅ Exact</th>
           <th title="Juiste uitslag">✓ Uitslag</th>
+          <th title="Landen doorkomst">🌍 Door</th>
         </tr>
       </thead>
       <tbody>`;
@@ -488,6 +586,7 @@ function renderStandings() {
         <td class="pts-cell">${s.points}</td>
         <td>${s.exactCount}</td>
         <td>${s.outcomeCount}</td>
+        <td>${s.advancementCount ?? 0}</td>
       </tr>`;
     });
 
@@ -499,6 +598,35 @@ function renderStandings() {
 // ============================================================
 // HELPERS
 // ============================================================
+
+// Haal alle teams per groep op uit de wedstrijddata
+function getTeamsPerGroup() {
+  const groups = {};
+  for (const m of Object.values(matches)) {
+    if (m.stage !== "GROUP_STAGE") continue;
+    const g = m.group || "UNKNOWN";
+    if (!groups[g]) groups[g] = new Set();
+    if (m.homeTeam) groups[g].add(m.homeTeam);
+    if (m.awayTeam) groups[g].add(m.awayTeam);
+  }
+  // Zet Sets om naar gesorteerde arrays
+  const result = {};
+  for (const [g, teams] of Object.entries(groups)) {
+    result[g] = [...teams].sort();
+  }
+  return result;
+}
+
+// Haal op welke teams daadwerkelijk zijn doorgekomen (staan in LAST_32)
+function getActuallyAdvanced() {
+  const advanced = new Set();
+  for (const m of Object.values(matches)) {
+    if (m.stage !== "LAST_32") continue;
+    if (m.homeTeam) advanced.add(m.homeTeam);
+    if (m.awayTeam) advanced.add(m.awayTeam);
+  }
+  return advanced;
+}
 
 const STAGE_LABEL = {
   GROUP_STAGE:    "Groepsfase",
@@ -601,5 +729,6 @@ window.logout = logout;
 window.savePredictions = savePredictions;
 window.adminLogin = adminLogin;
 window.deleteParticipant = deleteParticipant;
+window.updateAdvancementSelection = updateAdvancementSelection;
 
 init();
