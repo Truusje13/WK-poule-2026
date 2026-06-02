@@ -317,7 +317,7 @@ async function renderPredictions() {
   }
 
   // Bereken voorspelde groepsstand voor bracket-opvulling
-  const predictedStandings = calculatePredictedGroupStandings(existing);
+  const { standings: predictedStandings, teamStats: predictedTeamStats } = calculatePredictedGroupData(existing);
 
   let html = "";
 
@@ -378,11 +378,11 @@ async function renderPredictions() {
         if ((!homeLabel || !awayLabel) && LAST_32_BRACKET[m.id]) {
           const slot = LAST_32_BRACKET[m.id];
           if (!homeLabel) {
-            const resolved = resolveBracketSlot(slot.home, predictedStandings);
+            const resolved = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats);
             homeLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
           }
           if (!awayLabel) {
-            const resolved = resolveBracketSlot(slot.away, predictedStandings);
+            const resolved = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats);
             awayLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
           }
         }
@@ -495,8 +495,8 @@ function readCurrentPreds() {
 }
 
 function updateKnockoutTeamLabels() {
-  const currentPreds   = readCurrentPreds();
-  const predicted      = calculatePredictedGroupStandings(currentPreds);
+  const currentPreds = readCurrentPreds();
+  const { standings: predicted, teamStats } = calculatePredictedGroupData(currentPreds);
 
   // Update alle Last 32 match-rijen met voorspelde teamnamen
   document.querySelectorAll(".match-row").forEach(row => {
@@ -510,13 +510,13 @@ function updateKnockoutTeamLabels() {
     const awayEl = row.querySelector(".team.away");
 
     if (homeEl) {
-      const resolved = resolveBracketSlot(slot.home, predicted);
+      const resolved = resolveBracketSlot(slot.home, predicted, teamStats);
       homeEl.innerHTML = resolved
         ? `<span class="predicted-name">${t(resolved)}</span>`
         : "?";
     }
     if (awayEl) {
-      const resolved = resolveBracketSlot(slot.away, predicted);
+      const resolved = resolveBracketSlot(slot.away, predicted, teamStats);
       awayEl.innerHTML = resolved
         ? `<span class="predicted-name">${t(resolved)}</span>`
         : "?";
@@ -826,8 +826,8 @@ function getActuallyAdvanced() {
   return advanced;
 }
 
-// Bereken de VOORSPELDE groepsstand op basis van ingevulde scores
-function calculatePredictedGroupStandings(preds) {
+// Bereken de VOORSPELDE groepsstand + stats op basis van ingevulde scores
+function calculatePredictedGroupData(preds) {
   const groupStats = {};
   for (const [matchId, m] of Object.entries(matches)) {
     if (m.stage !== "GROUP_STAGE") continue;
@@ -848,12 +848,19 @@ function calculatePredictedGroupStandings(preds) {
     }
   }
   const standings = {};
+  const teamStats = {}; // team -> { pts, gd, gf }
   for (const [g, teams] of Object.entries(groupStats)) {
-    standings[g] = Object.entries(teams)
-      .sort(([,a],[,b]) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
-      .map(([team]) => team);
+    const sorted = Object.entries(teams)
+      .sort(([,a],[,b]) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+    standings[g] = sorted.map(([team]) => team);
+    sorted.forEach(([team, s]) => { teamStats[team] = s; });
   }
-  return standings;
+  return { standings, teamStats };
+}
+
+// Wrapper die alleen de standings teruggeeft (bestaande code)
+function calculatePredictedGroupStandings(preds) {
+  return calculatePredictedGroupData(preds).standings;
 }
 
 // Bereken de WERKELIJKE groepsstand op basis van resultaten (voor positiebonus)
@@ -1071,10 +1078,23 @@ const LAST_32_BRACKET = {
 };
 
 // Bepaal de voorspelde teamnaam voor een bracket-slot op basis van groepsstand
-function resolveBracketSlot(slot, predictedStandings) {
+function resolveBracketSlot(slot, predictedStandings, teamStats) {
   if (slot.type === "winner")    return predictedStandings[slot.group]?.[0] ?? null;
   if (slot.type === "runner-up") return predictedStandings[slot.group]?.[1] ?? null;
-  if (slot.type === "third")     return `beste 3e uit groep ${slot.groups.join("/")}`;
+  if (slot.type === "third") {
+    // Zoek de beste 3e-plaatser uit de opgegeven groepen
+    const candidates = slot.groups
+      .map(g => predictedStandings[`GROUP_${g}`]?.[2])
+      .filter(Boolean);
+    if (candidates.length === 0) return null;
+    // Sorteer op punten, doelsaldo, doelpunten
+    candidates.sort((a, b) => {
+      const sa = teamStats?.[a] ?? { pts: 0, gd: 0, gf: 0 };
+      const sb = teamStats?.[b] ?? { pts: 0, gd: 0, gf: 0 };
+      return sb.pts - sa.pts || sb.gd - sa.gd || sb.gf - sa.gf;
+    });
+    return candidates[0];
+  }
   return null;
 }
 
