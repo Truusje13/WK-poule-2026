@@ -25,7 +25,20 @@ const ADMIN_PASSWORD = "oranje2026";
 // INSTELLINGEN (hoef je normaal niet aan te passen)
 // ============================================================
 
-const SCORING = { exact: 3, outcome: 1, advancement: 2 }; // 2 pts per correct doorgekomt land
+const SCORING = {
+  exact: 5,          // exacte uitslag
+  outcome: 3,        // juiste winnaar of gelijkspel
+  advancement: 2,    // land correct in top 2 groep
+  position: 2,       // land ook op juiste positie (1e of 2e)
+  round: {           // bonus per correct voorspelde winnaar in knockoutronde
+    LAST_32:        3,
+    LAST_16:        5,
+    QUARTER_FINALS: 10,
+    SEMI_FINALS:    20,
+    FINAL:          30,
+    CHAMPION:       50   // extra bonus voor correct voorspelde wereldkampioen
+  }
+};
 const DEADLINE = new Date("2026-06-11T17:00:00Z"); // Eerste wedstrijd WK 2026
 const CACHE_KEY = "poule_matches_v1";
 const RESULTS_CACHE_MINUTES = 30;
@@ -371,53 +384,63 @@ async function renderPredictions() {
     }
   }
 
-  // ── Doorkomst-sectie ──
-  const teamsPerGroup = getTeamsPerGroup();
-  const advancedActual = getActuallyAdvanced();
-  const advancedSnap = await get(ref(db, `advancement/${currentUser.id}`));
+  // ── Doorkomst groepsfase ──
+  const teamsPerGroup   = getTeamsPerGroup();
+  const advancedActual  = getActuallyAdvanced();
+  const actualStandings = calculateGroupStandings();
+  const advancedSnap    = await get(ref(db, `advancement/${currentUser.id}`));
   const savedAdvancement = advancedSnap.exists() ? advancedSnap.val() : {};
-
-  const sortedGroupKeys = Object.keys(teamsPerGroup).sort();
+  const sortedGroupKeys  = Object.keys(teamsPerGroup).sort();
 
   if (sortedGroupKeys.length > 0) {
     html += `<div class="stage-header">Welke landen komen door uit de groepsfase?</div>
     <div class="advancement-intro">
-      Kies per groep de <strong>2 landen</strong> die jij denkt dat doorgaan naar de volgende ronde.
-      Je krijgt <strong>${SCORING.advancement} punten</strong> per land dat je goed hebt.
+      Kies per groep de <strong>1e en 2e plaats</strong>.
+      <strong>${SCORING.advancement} punten</strong> per correct land •
+      <strong>+${SCORING.position} extra</strong> als ook de positie klopt.
     </div>`;
 
     for (const group of sortedGroupKeys) {
-      const teams = teamsPerGroup[group];
+      const teams      = teamsPerGroup[group];
       const groupLabel = group.replace("GROUP_", "Groep ");
-      const savedForGroup = savedAdvancement[group] || [];
+      const saved      = savedAdvancement[group] || { pos1: "", pos2: "" };
+      const actual1    = actualStandings[group]?.[0] ?? null;
+      const actual2    = actualStandings[group]?.[1] ?? null;
+      const known      = advancedActual.size > 0;
+
+      const teamOptions = (selected) =>
+        `<option value="">-- kies --</option>` +
+        teams.map(t => `<option value="${t}" ${t === selected ? "selected" : ""}>${t}</option>`).join("");
+
+      const badge = (pos, saved) => {
+        if (!known || !saved) return "";
+        const actual = pos === 1 ? actual1 : actual2;
+        const advanced = advancedActual.has(saved);
+        const rightPos = saved === actual;
+        if (advanced && rightPos) return `<span class="adv-badge adv-correct">✅ ${SCORING.advancement + SCORING.position}pts</span>`;
+        if (advanced)             return `<span class="adv-badge adv-good">✓ ${SCORING.advancement}pts</span>`;
+        return `<span class="adv-badge adv-wrong">✗</span>`;
+      };
 
       html += `<div class="group-section">
-        <h3>${groupLabel} — kies 2 landen</h3>
-        <div class="advancement-grid" data-group="${group}">`;
-
-      for (const team of teams) {
-        const isSelected = savedForGroup.includes(team);
-        const isAdvanced = advancedActual.has(team);
-        const wasSelected = savedForGroup.includes(team);
-        const known = advancedActual.size > 0;
-
-        let badgeHtml = "";
-        if (known) {
-          if (isAdvanced && wasSelected) badgeHtml = `<span class="adv-badge adv-correct">✅ +${SCORING.advancement}pts</span>`;
-          else if (isAdvanced) badgeHtml = `<span class="adv-badge adv-missed">➡️ doorgekomen</span>`;
-          else if (wasSelected) badgeHtml = `<span class="adv-badge adv-wrong">✗ niet door</span>`;
-        }
-
-        html += `<label class="adv-team ${isSelected ? "selected" : ""} ${locked ? "locked" : ""}">
-          <input type="checkbox" data-group="${group}" data-team="${team}"
-            ${isSelected ? "checked" : ""} ${locked ? "disabled" : ""}
-            onchange="updateAdvancementSelection(this)" />
-          <span class="adv-team-name">${team}</span>
-          ${badgeHtml}
-        </label>`;
-      }
-
-      html += `</div></div>`;
+        <h3>${groupLabel}</h3>
+        <div class="advancement-pos">
+          <div class="adv-pos-row">
+            <span class="adv-pos-label">🥇 1e plaats</span>
+            ${locked
+              ? `<span class="adv-locked-val">${saved.pos1 || "–"}</span>`
+              : `<select data-group="${group}" data-pos="pos1" ${locked ? "disabled" : ""}>${teamOptions(saved.pos1)}</select>`}
+            ${badge(1, saved.pos1)}
+          </div>
+          <div class="adv-pos-row">
+            <span class="adv-pos-label">🥈 2e plaats</span>
+            ${locked
+              ? `<span class="adv-locked-val">${saved.pos2 || "–"}</span>`
+              : `<select data-group="${group}" data-pos="pos2" ${locked ? "disabled" : ""}>${teamOptions(saved.pos2)}</select>`}
+            ${badge(2, saved.pos2)}
+          </div>
+        </div>
+      </div>`;
     }
   }
 
@@ -446,16 +469,14 @@ async function savePredictions() {
     }
   }
 
-  // Doorkomst opslaan — max 2 per groep afdwingen
+  // Doorkomst opslaan (pos1 / pos2 per groep)
   const advData = {};
-  const checkboxes = document.querySelectorAll("#predictions-container input[type=checkbox]");
-  for (const cb of checkboxes) {
-    const group = cb.dataset.group;
-    const team = cb.dataset.team;
-    if (cb.checked) {
-      if (!advData[group]) advData[group] = [];
-      advData[group].push(team);
-    }
+  const selects = document.querySelectorAll("#predictions-container select[data-group]");
+  for (const sel of selects) {
+    const group = sel.dataset.group;
+    const pos   = sel.dataset.pos;
+    if (!advData[group]) advData[group] = { pos1: "", pos2: "" };
+    advData[group][pos] = sel.value;
   }
 
   try {
@@ -476,20 +497,6 @@ async function savePredictions() {
   }
 }
 
-// Zorg dat er maximaal 2 landen per groep geselecteerd kunnen worden
-function updateAdvancementSelection(checkbox) {
-  const group = checkbox.dataset.group;
-  const allInGroup = document.querySelectorAll(`input[type=checkbox][data-group="${group}"]`);
-  const checked = [...allInGroup].filter(c => c.checked);
-  if (checked.length > 2) {
-    checkbox.checked = false;
-    return;
-  }
-  // Update visuele staat
-  allInGroup.forEach(cb => {
-    cb.closest(".adv-team").classList.toggle("selected", cb.checked);
-  });
-}
 
 // ============================================================
 // STAND BEREKENEN
@@ -513,32 +520,63 @@ async function recalculateStandings(participantId) {
   const adv   = advSnap.exists()  ? advSnap.val()  : {};
   const name  = partSnap.val().name;
 
-  let points = 0, exactCount = 0, outcomeCount = 0, advancementCount = 0;
+  let points = 0, exactCount = 0, outcomeCount = 0, advancementPts = 0, roundBonusPts = 0;
 
-  // Wedstrijd-punten
+  // ── 1. Wedstrijd-punten + knockout-rondebonus ──
   for (const [matchId, m] of Object.entries(matches)) {
     const pts = calcPoints(m, preds[matchId]);
     if (pts === null) continue;
     points += pts;
     if (pts === SCORING.exact) exactCount++;
     else if (pts === SCORING.outcome) outcomeCount++;
+
+    // Bonus voor correct voorspelde winnaar in knockoutronden
+    if (pts > 0 && m.stage && m.stage !== "GROUP_STAGE") {
+      const pred = preds[matchId];
+      const predH = parseInt(pred?.home), predA = parseInt(pred?.away);
+      const predOutcome = Math.sign(predH - predA);
+      const realOutcome = Math.sign(m.homeScore - m.awayScore);
+      if (predOutcome === realOutcome && realOutcome !== 0) {
+        // Correct winnaar voorspeld
+        const bonus = SCORING.round[m.stage] ?? 0;
+        points      += bonus;
+        roundBonusPts += bonus;
+        // Extra bonus voor correct voorspelde wereldkampioen (winnaar finale)
+        if (m.stage === "FINAL") {
+          points        += SCORING.round.CHAMPION;
+          roundBonusPts += SCORING.round.CHAMPION;
+        }
+      }
+    }
   }
 
-  // Doorkomst-punten (alleen als LAST_32 bekend is)
-  const actualAdvanced = getActuallyAdvanced();
+  // ── 2. Doorkomst groepsfase ──
+  const actualAdvanced  = getActuallyAdvanced();
+  const actualStandings = calculateGroupStandings();
+
   if (actualAdvanced.size > 0) {
-    for (const teams of Object.values(adv)) {
-      for (const team of (teams || [])) {
-        if (actualAdvanced.has(team)) {
-          points += SCORING.advancement;
-          advancementCount++;
+    for (const [group, saved] of Object.entries(adv)) {
+      const actual1 = actualStandings[group]?.[0] ?? null;
+      const actual2 = actualStandings[group]?.[1] ?? null;
+
+      for (const [posKey, team] of Object.entries(saved)) {
+        if (!team || !actualAdvanced.has(team)) continue;
+        // Correct doorgekomt
+        points        += SCORING.advancement;
+        advancementPts += SCORING.advancement;
+        // Bonus voor juiste positie
+        const predPos = posKey === "pos1" ? 1 : 2;
+        const actualPos = team === actual1 ? 1 : team === actual2 ? 2 : null;
+        if (actualPos && predPos === actualPos) {
+          points        += SCORING.position;
+          advancementPts += SCORING.position;
         }
       }
     }
   }
 
   await set(ref(db, `standings/${participantId}`), {
-    name, points, exactCount, outcomeCount, advancementCount, updatedAt: Date.now()
+    name, points, exactCount, outcomeCount, advancementPts, roundBonusPts, updatedAt: Date.now()
   });
 }
 
@@ -572,7 +610,8 @@ function renderStandings() {
           <th title="Totaal punten">Punten</th>
           <th title="Exacte scores">✅ Exact</th>
           <th title="Juiste uitslag">✓ Uitslag</th>
-          <th title="Landen doorkomst">🌍 Door</th>
+          <th title="Doorkomst & positie">🌍 Door</th>
+          <th title="Knockout rondebonus">🏆 Bonus</th>
         </tr>
       </thead>
       <tbody>`;
@@ -586,7 +625,8 @@ function renderStandings() {
         <td class="pts-cell">${s.points}</td>
         <td>${s.exactCount}</td>
         <td>${s.outcomeCount}</td>
-        <td>${s.advancementCount ?? 0}</td>
+        <td>${s.advancementPts ?? 0}</td>
+        <td>${s.roundBonusPts ?? 0}</td>
       </tr>`;
     });
 
@@ -599,7 +639,7 @@ function renderStandings() {
 // HELPERS
 // ============================================================
 
-// Haal alle teams per groep op uit de wedstrijddata
+// Teams per groep ophalen uit de wedstrijddata
 function getTeamsPerGroup() {
   const groups = {};
   for (const m of Object.values(matches)) {
@@ -609,7 +649,6 @@ function getTeamsPerGroup() {
     if (m.homeTeam) groups[g].add(m.homeTeam);
     if (m.awayTeam) groups[g].add(m.awayTeam);
   }
-  // Zet Sets om naar gesorteerde arrays
   const result = {};
   for (const [g, teams] of Object.entries(groups)) {
     result[g] = [...teams].sort();
@@ -617,7 +656,7 @@ function getTeamsPerGroup() {
   return result;
 }
 
-// Haal op welke teams daadwerkelijk zijn doorgekomen (staan in LAST_32)
+// Welke teams zijn daadwerkelijk doorgekomen (staan in LAST_32)
 function getActuallyAdvanced() {
   const advanced = new Set();
   for (const m of Object.values(matches)) {
@@ -626,6 +665,34 @@ function getActuallyAdvanced() {
     if (m.awayTeam) advanced.add(m.awayTeam);
   }
   return advanced;
+}
+
+// Bereken de werkelijke groepsstand op basis van resultaten (voor positiebonus)
+function calculateGroupStandings() {
+  const groupStats = {};
+  for (const m of Object.values(matches)) {
+    if (m.stage !== "GROUP_STAGE" || m.status !== "FINISHED") continue;
+    if (m.homeScore === null || m.awayScore === null) continue;
+    const g = m.group || "UNKNOWN";
+    if (!groupStats[g]) groupStats[g] = {};
+    for (const [team, isHome] of [[m.homeTeam, true], [m.awayTeam, false]]) {
+      if (!groupStats[g][team]) groupStats[g][team] = { pts: 0, gd: 0, gf: 0 };
+      const scored    = isHome ? m.homeScore : m.awayScore;
+      const conceded  = isHome ? m.awayScore : m.homeScore;
+      groupStats[g][team].gf += scored;
+      groupStats[g][team].gd += scored - conceded;
+      if (scored > conceded)  groupStats[g][team].pts += 3;
+      else if (scored === conceded) groupStats[g][team].pts += 1;
+    }
+  }
+  // Sorteer per groep: punten → doelsaldo → doelpunten
+  const standings = {};
+  for (const [g, teams] of Object.entries(groupStats)) {
+    standings[g] = Object.entries(teams)
+      .sort(([,a],[,b]) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+      .map(([team]) => team);
+  }
+  return standings;
 }
 
 const STAGE_LABEL = {
