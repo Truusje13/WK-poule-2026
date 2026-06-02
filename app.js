@@ -376,6 +376,23 @@ async function renderPredictions() {
             }`
           : `<span class="date">${formatDate(m.utcDate)}</span>`;
 
+        // Teamnamen eerst bepalen (worden ook gebruikt in penaltyHtml)
+        let homeLabel = m.homeTeam ? t(m.homeTeam) : null;
+        let awayLabel = m.awayTeam ? t(m.awayTeam) : null;
+        if ((!homeLabel || !awayLabel) && LAST_32_BRACKET[m.id]) {
+          const slot = LAST_32_BRACKET[m.id];
+          if (!homeLabel) {
+            const resolved = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats);
+            homeLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
+          }
+          if (!awayLabel) {
+            const resolved = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats);
+            awayLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
+          }
+        }
+        homeLabel = homeLabel || "?";
+        awayLabel = awayLabel || "?";
+
         const isKnockout = m.stage && m.stage !== "GROUP_STAGE";
         const hasPenalty = isKnockout && (pred.penalty || m.penaltyHome != null);
         const penaltyWinner = pred.penaltyWinner ?? null;
@@ -427,22 +444,6 @@ async function renderPredictions() {
              <input type="number" min="0" max="20" value="${pred.away ?? ""}"
                data-match="${m.id}" data-side="away" />`;
 
-        // Vul teamnamen in vanuit bracket als ze nog onbekend zijn
-        let homeLabel = m.homeTeam ? t(m.homeTeam) : null;
-        let awayLabel = m.awayTeam ? t(m.awayTeam) : null;
-        if ((!homeLabel || !awayLabel) && LAST_32_BRACKET[m.id]) {
-          const slot = LAST_32_BRACKET[m.id];
-          if (!homeLabel) {
-            const resolved = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats);
-            homeLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
-          }
-          if (!awayLabel) {
-            const resolved = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats);
-            awayLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
-          }
-        }
-        homeLabel = homeLabel || "?";
-        awayLabel = awayLabel || "?";
 
         html += `
           <div class="match-row${isFinished ? " finished" : ""}${isKnockout ? " knockout-row" : ""}">
