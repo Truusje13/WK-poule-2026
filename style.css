@@ -678,6 +678,67 @@ main {
 .pred-ko-team.correct { background: #d4edda; color: #155724; font-weight: 600; }
 .pred-ko-team.wrong  { background: #fde8e8; color: #922; text-decoration: line-through; }
 
+/* ===== PENALTY SECTIE ===== */
+.knockout-row { flex-wrap: wrap; }
+
+.penalty-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.4rem 0 0.1rem;
+  font-size: 0.82rem;
+}
+
+.penalty-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  color: #555;
+  user-select: none;
+}
+
+.penalty-toggle input { cursor: pointer; }
+
+.penalty-winner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.penalty-winner.hidden { display: none; }
+
+.pen-label {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.pen-btn {
+  padding: 0.25rem 0.65rem;
+  border: 2px solid var(--gray);
+  border-radius: 20px;
+  background: white;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pen-btn:hover { border-color: var(--orange-light); background: var(--orange-pale); }
+.pen-btn.selected { border-color: var(--orange); background: var(--orange); color: white; font-weight: 600; }
+
+.locked-pen {
+  color: #555;
+  padding: 0.35rem 0;
+  font-size: 0.82rem;
+}
+
 /* Voorspelde teamnamen in knockoutronden */
 .predicted-name {
   color: var(--orange-dark);

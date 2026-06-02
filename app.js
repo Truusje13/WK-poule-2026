@@ -30,13 +30,14 @@ const SCORING = {
   outcome: 3,        // juiste winnaar of gelijkspel
   advancement: 2,    // land correct in top 2 groep
   position: 2,       // land ook op juiste positie (1e of 2e)
+  penalty: 3,        // correct voorspelde penalty-winnaar
   round: {           // bonus per correct voorspelde winnaar in knockoutronde
     LAST_32:        3,
     LAST_16:        5,
     QUARTER_FINALS: 10,
     SEMI_FINALS:    20,
     FINAL:          30,
-    CHAMPION:       50   // extra bonus voor correct voorspelde wereldkampioen
+    CHAMPION:       50
   }
 };
 const DEADLINE = new Date("2026-06-11T17:00:00Z"); // Eerste wedstrijd WK 2026
@@ -260,13 +261,26 @@ function calcPoints(match, pred) {
   const ph = parseInt(pred.home), pa = parseInt(pred.away);
   if (isNaN(ph) || isNaN(pa)) return null;
 
-  if (ph === match.homeScore && pa === match.awayScore) return SCORING.exact;
+  let pts = 0;
 
-  const realOutcome = Math.sign(match.homeScore - match.awayScore);
-  const predOutcome = Math.sign(ph - pa);
-  if (realOutcome === predOutcome) return SCORING.outcome;
+  // Exacte score
+  if (ph === match.homeScore && pa === match.awayScore) {
+    pts += SCORING.exact;
+  } else {
+    const realOutcome = Math.sign(match.homeScore - match.awayScore);
+    const predOutcome = Math.sign(ph - pa);
+    if (realOutcome === predOutcome) pts += SCORING.outcome;
+  }
 
-  return 0;
+  // Penalty-bonus: alleen in knockoutronden bij een gelijkspel
+  const isKnockout = match.stage && match.stage !== "GROUP_STAGE";
+  const wentToPenalties = match.penaltyHome !== null && match.penaltyHome !== undefined;
+  if (isKnockout && wentToPenalties && pred.penalty && pred.penaltyWinner) {
+    const actualWinner = match.penaltyHome > match.penaltyAway ? "home" : "away";
+    if (pred.penaltyWinner === actualWinner) pts += SCORING.penalty;
+  }
+
+  return pts > 0 ? pts : 0;
 }
 
 // ============================================================
@@ -362,6 +376,47 @@ async function renderPredictions() {
             }`
           : `<span class="date">${formatDate(m.utcDate)}</span>`;
 
+        const isKnockout = m.stage && m.stage !== "GROUP_STAGE";
+        const hasPenalty = isKnockout && (pred.penalty || m.penaltyHome != null);
+        const penaltyWinner = pred.penaltyWinner ?? null;
+        const actualPenWinner = (m.penaltyHome != null)
+          ? (m.penaltyHome > m.penaltyAway ? "home" : "away") : null;
+
+        let penaltyHtml = "";
+        if (isKnockout && !locked) {
+          penaltyHtml = `
+            <div class="penalty-row" id="pen-row-${m.id}">
+              <label class="penalty-toggle">
+                <input type="checkbox" data-match="${m.id}" data-type="penalty"
+                  ${pred.penalty ? "checked" : ""}
+                  onchange="togglePenaltyWinner(this)" />
+                🥅 Naar penalty's
+              </label>
+              <div class="penalty-winner ${pred.penalty ? "" : "hidden"}" id="pen-winner-${m.id}">
+                <span class="pen-label">Wie wint?</span>
+                <button class="pen-btn ${penaltyWinner === "home" ? "selected" : ""}"
+                  data-match="${m.id}" data-side="home"
+                  onclick="selectPenaltyWinner(this)">${homeLabel?.replace(/<[^>]*>/g,"") || "Thuis"}</button>
+                <button class="pen-btn ${penaltyWinner === "away" ? "selected" : ""}"
+                  data-match="${m.id}" data-side="away"
+                  onclick="selectPenaltyWinner(this)">${awayLabel?.replace(/<[^>]*>/g,"") || "Uit"}</button>
+              </div>
+            </div>`;
+        } else if (isKnockout && locked && hasPenalty) {
+          const winnerName = penaltyWinner === "home"
+            ? (m.homeTeam ? t(m.homeTeam) : "thuis")
+            : penaltyWinner === "away"
+              ? (m.awayTeam ? t(m.awayTeam) : "uit")
+              : "–";
+          const correct = actualPenWinner && penaltyWinner === actualPenWinner;
+          const wrong   = actualPenWinner && penaltyWinner && penaltyWinner !== actualPenWinner;
+          penaltyHtml = `<div class="penalty-row locked-pen">
+            🥅 Penalty-winnaar: <strong>${winnerName}</strong>
+            ${correct ? `<span class="adv-badge adv-correct">✅ +${SCORING.penalty}pts</span>` : ""}
+            ${wrong   ? `<span class="adv-badge adv-wrong">✗</span>` : ""}
+          </div>`;
+        }
+
         const scoreHtml = locked
           ? `<span class="pred-score ${pred.home === "" ? "empty" : ""}">
               ${pred.home !== "" ? `${pred.home}–${pred.away}` : "–"}
@@ -390,13 +445,14 @@ async function renderPredictions() {
         awayLabel = awayLabel || "?";
 
         html += `
-          <div class="match-row${isFinished ? " finished" : ""}">
+          <div class="match-row${isFinished ? " finished" : ""}${isKnockout ? " knockout-row" : ""}">
             <div class="teams">
               <span class="team home">${homeLabel}</span>
               <div class="score-input">${scoreHtml}</div>
               <span class="team away">${awayLabel}</span>
             </div>
             <div class="match-meta">${metaHtml}</div>
+            ${penaltyHtml}
           </div>`;
       }
 
@@ -454,12 +510,10 @@ function showAutoSaveStatus(msg) {
   if (btn) btn.textContent = msg;
 }
 
-async function autoSave() {
-  const inputs = document.querySelectorAll("#predictions-container input[type=number]");
-  if (inputs.length === 0) return;
-
+function collectPredictionData() {
   const data = {};
-  for (const input of inputs) {
+  // Score-invoer
+  document.querySelectorAll("#predictions-container input[type=number]").forEach(input => {
     const matchId = input.dataset.match;
     const side    = input.dataset.side;
     const val     = input.value.trim();
@@ -467,7 +521,25 @@ async function autoSave() {
       if (!data[matchId]) data[matchId] = {};
       data[matchId][side] = parseInt(val);
     }
-  }
+  });
+  // Penalty-invoer
+  document.querySelectorAll("#predictions-container input[type=checkbox][data-type='penalty']").forEach(cb => {
+    const matchId = cb.dataset.match;
+    if (!data[matchId]) data[matchId] = {};
+    data[matchId].penalty = cb.checked;
+    if (cb.checked) {
+      const selectedBtn = document.querySelector(`.pen-btn.selected[data-match="${matchId}"]`);
+      data[matchId].penaltyWinner = selectedBtn?.dataset.side ?? null;
+    }
+  });
+  return data;
+}
+
+async function autoSave() {
+  const inputs = document.querySelectorAll("#predictions-container input[type=number]");
+  if (inputs.length === 0) return;
+
+  const data = collectPredictionData();
 
   try {
     await set(ref(db, `predictions/${currentUser.id}`), data);
@@ -624,18 +696,7 @@ async function savePredictions() {
   btn.disabled = true;
   btn.textContent = "Opslaan...";
 
-  // Scores opslaan
-  const inputs = document.querySelectorAll("#predictions-container input[type=number]");
-  const data = {};
-  for (const input of inputs) {
-    const matchId = input.dataset.match;
-    const side = input.dataset.side;
-    const val = input.value.trim();
-    if (val !== "") {
-      if (!data[matchId]) data[matchId] = {};
-      data[matchId][side] = parseInt(val);
-    }
-  }
+  const data = collectPredictionData();
 
   try {
     await set(ref(db, `predictions/${currentUser.id}`), data);
@@ -1191,6 +1252,18 @@ async function deleteParticipant(id, name) {
 // ============================================================
 // GLOBALS (aangeroepen vanuit HTML onclick)
 // ============================================================
+
+window.togglePenaltyWinner = function(checkbox) {
+  const matchId   = checkbox.dataset.match;
+  const winnerDiv = document.getElementById(`pen-winner-${matchId}`);
+  if (winnerDiv) winnerDiv.classList.toggle("hidden", !checkbox.checked);
+};
+
+window.selectPenaltyWinner = function(btn) {
+  const matchId = btn.dataset.match;
+  document.querySelectorAll(`.pen-btn[data-match="${matchId}"]`).forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+};
 
 window.showView = showView;
 window.renderPredictions = renderPredictions;

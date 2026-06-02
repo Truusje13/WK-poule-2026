@@ -29,8 +29,10 @@ jobs:
                   utcDate: .utcDate,
                   status: .status,
                   stage: .stage,
-                  homeScore: (.score.fullTime.home // null),
-                  awayScore: (.score.fullTime.away // null),
+                  homeScore:       (.score.fullTime.home // null),
+                  awayScore:       (.score.fullTime.away // null),
+                  penaltyHome:     (.score.penalties.home // null),
+                  penaltyAway:     (.score.penalties.away // null),
                   group: (.group // null)
                 }
               })
