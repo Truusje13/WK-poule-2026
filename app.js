@@ -796,6 +796,5 @@ window.logout = logout;
 window.savePredictions = savePredictions;
 window.adminLogin = adminLogin;
 window.deleteParticipant = deleteParticipant;
-window.updateAdvancementSelection = updateAdvancementSelection;
 
 init();
