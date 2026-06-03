@@ -340,6 +340,8 @@ async function renderPredictions() {
 
   // Bereken voorspelde groepsstand voor bracket-opvulling
   const { standings: predictedStandings, teamStats: predictedTeamStats } = calculatePredictedGroupData(existing);
+  // Bereken 1-op-1 toewijzing van de 8 geselecteerde nummer-3 landen aan de bracket-slots
+  const thirdAssignment = computeThirdAssignment(thirdAdvData, predictedStandings);
 
   let html = "";
 
@@ -391,12 +393,12 @@ async function renderPredictions() {
         if ((!homeLabel || !awayLabel) && LAST_32_BRACKET[m.id]) {
           const slot = LAST_32_BRACKET[m.id];
           if (!homeLabel) {
-            const { team, preliminary } = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats, thirdPlaceData, thirdAdvData);
+            const { team, preliminary } = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats, m.id, "home", thirdAssignment);
             homeLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
             if (preliminary) isPreliminary = true;
           }
           if (!awayLabel) {
-            const { team, preliminary } = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats, thirdPlaceData, thirdAdvData);
+            const { team, preliminary } = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats, m.id, "away", thirdAssignment);
             awayLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
             if (preliminary) isPreliminary = true;
           }
@@ -669,9 +671,10 @@ function readCurrentThirdAdvData() {
 }
 
 function updateKnockoutTeamLabels() {
-  const currentPreds   = readCurrentPreds();
+  const currentPreds    = readCurrentPreds();
   const currentThirdAdv = readCurrentThirdAdvData();
   const { standings: predicted, teamStats } = calculatePredictedGroupData(currentPreds);
+  const currentThirdAssignment = computeThirdAssignment(currentThirdAdv, predicted);
 
   // Update alle Last 32 match-rijen met voorspelde teamnamen
   document.querySelectorAll(".match-row").forEach(row => {
@@ -685,11 +688,11 @@ function updateKnockoutTeamLabels() {
     const awayEl = row.querySelector(".team.away");
 
     if (homeEl) {
-      const { team } = resolveBracketSlot(slot.home, predicted, teamStats, {}, currentThirdAdv);
+      const { team } = resolveBracketSlot(slot.home, predicted, teamStats, matchId, "home", currentThirdAssignment);
       homeEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
     }
     if (awayEl) {
-      const { team } = resolveBracketSlot(slot.away, predicted, teamStats, {}, currentThirdAdv);
+      const { team } = resolveBracketSlot(slot.away, predicted, teamStats, matchId, "away", currentThirdAssignment);
       awayEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
     }
   });
@@ -1312,19 +1315,53 @@ const LAST_32_BRACKET = {
   "537430": { home: {type:"winner",    group:"GROUP_K"}, away: {type:"third", groups:["D","E","I","J","L"]} },
 };
 
-// Bepaal de voorspelde teamnaam voor een bracket-slot op basis van groepsstand
-// thirdPredictions = { GROUP_A: "teamName", ... } (opgeslagen nummer-3 voorspellingen)
-// thirdAdvPredictions = ["team1", ...] (voorspelde 8 doorgaande nummers 3)
-function resolveBracketSlot(slot, predictedStandings, teamStats, thirdPreds, thirdAdvPreds) {
+// Bereken de correcte 1-op-1 toewijzing van de 8 geselecteerde nummer-3 landen
+// aan de 8 bracket-slots via greedy bipartite matching (meest beperkte slot eerst).
+function computeThirdAssignment(selected8, predictedStandings) {
+  // Bouw team → groep (letter) mapping
+  const teamToGroup = {};
+  for (const [group, order] of Object.entries(predictedStandings)) {
+    const third = order[2];
+    if (third) teamToGroup[third] = group.replace("GROUP_", "");
+  }
+
+  // Verzamel alle "third" slots uit het bracket
+  const thirdSlots = [];
+  for (const [matchId, slot] of Object.entries(LAST_32_BRACKET)) {
+    if (slot.home.type === "third") thirdSlots.push({ matchId, side: "home", groups: slot.home.groups });
+    if (slot.away.type === "third") thirdSlots.push({ matchId, side: "away", groups: slot.away.groups });
+  }
+
+  // Sorteer op minste kandidaten (most-constrained first)
+  const slotsWithCandidates = thirdSlots.map(s => ({
+    ...s,
+    candidates: selected8.filter(team => {
+      const g = teamToGroup[team];
+      return g && s.groups.includes(g);
+    })
+  })).sort((a, b) => a.candidates.length - b.candidates.length);
+
+  // Greedy toewijzing
+  const assignment = {}; // `${matchId}-${side}` -> team
+  const assigned = new Set();
+  for (const slot of slotsWithCandidates) {
+    const available = slot.candidates.filter(t => !assigned.has(t));
+    if (available.length > 0) {
+      assignment[`${slot.matchId}-${slot.side}`] = available[0];
+      assigned.add(available[0]);
+    }
+  }
+  return assignment;
+}
+
+// Bepaal de voorspelde teamnaam voor een bracket-slot.
+// assignment = output van computeThirdAssignment (optioneel, voor third-slots)
+function resolveBracketSlot(slot, predictedStandings, teamStats, matchId, side, thirdAssignment) {
   if (slot.type === "winner")    return { team: predictedStandings[slot.group]?.[0] ?? null, preliminary: false };
   if (slot.type === "runner-up") return { team: predictedStandings[slot.group]?.[1] ?? null, preliminary: false };
   if (slot.type === "third") {
-    // Gebruik de automatisch berekende 3e-plaatser per groep (uit voorspelde standen),
-    // gefilterd op de 8 landen die de gebruiker heeft aangegeven dat ze doorgaan
-    const candidates = slot.groups
-      .map(g => predictedStandings[`GROUP_${g}`]?.[2])
-      .filter(team => team && thirdAdvPreds?.includes(team));
-    return { team: candidates[0] ?? null, preliminary: true };
+    const team = thirdAssignment?.[`${matchId}-${side}`] ?? null;
+    return { team, preliminary: true };
   }
   return { team: null, preliminary: false };
 }
