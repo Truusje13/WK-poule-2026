@@ -660,8 +660,17 @@ function readCurrentPreds() {
   return currentPreds;
 }
 
+function readCurrentThirdAdvData() {
+  const selected = [];
+  document.querySelectorAll(".third-adv-cb:checked").forEach(cb => {
+    if (cb.dataset.team) selected.push(cb.dataset.team);
+  });
+  return selected;
+}
+
 function updateKnockoutTeamLabels() {
-  const currentPreds = readCurrentPreds();
+  const currentPreds   = readCurrentPreds();
+  const currentThirdAdv = readCurrentThirdAdvData();
   const { standings: predicted, teamStats } = calculatePredictedGroupData(currentPreds);
 
   // Update alle Last 32 match-rijen met voorspelde teamnamen
@@ -676,11 +685,11 @@ function updateKnockoutTeamLabels() {
     const awayEl = row.querySelector(".team.away");
 
     if (homeEl) {
-      const { team } = resolveBracketSlot(slot.home, predicted, teamStats, {}, []);
+      const { team } = resolveBracketSlot(slot.home, predicted, teamStats, {}, currentThirdAdv);
       homeEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
     }
     if (awayEl) {
-      const { team } = resolveBracketSlot(slot.away, predicted, teamStats, {}, []);
+      const { team } = resolveBracketSlot(slot.away, predicted, teamStats, {}, currentThirdAdv);
       awayEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
     }
   });
@@ -1427,10 +1436,12 @@ window.updateThirdAdvCount = function() {
     if (!cb.checked) cb.disabled = checked >= 8;
   });
   // Update visuele staat
-  document.querySelectorAll(".third-adv-team label, label.third-adv-team").forEach(label => {
+  document.querySelectorAll("label.third-adv-team").forEach(label => {
     const cb = label.querySelector("input");
     if (cb) label.classList.toggle("selected", cb.checked);
   });
+  // Update de bracket in de Last 32
+  updateKnockoutTeamLabels();
 };
 
 window.togglePenaltyWinner = function(checkbox) {
