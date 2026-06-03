@@ -386,21 +386,38 @@ async function renderPredictions() {
             }`
           : `<span class="date">${formatDate(m.utcDate)}</span>`;
 
-        // Teamnamen eerst bepalen (worden ook gebruikt in penaltyHtml)
+        // Teamnamen bepalen — eerst API, dan bracket-resolutie uit voorspellingen
         let homeLabel = m.homeTeam ? t(m.homeTeam) : null;
         let awayLabel = m.awayTeam ? t(m.awayTeam) : null;
         let isPreliminary = false;
-        if ((!homeLabel || !awayLabel) && LAST_32_BRACKET[m.id]) {
-          const slot = LAST_32_BRACKET[m.id];
-          if (!homeLabel) {
-            const { team, preliminary } = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats, m.id, "home", thirdAssignment);
-            homeLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
-            if (preliminary) isPreliminary = true;
-          }
-          if (!awayLabel) {
-            const { team, preliminary } = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats, m.id, "away", thirdAssignment);
-            awayLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
-            if (preliminary) isPreliminary = true;
+
+        if (!homeLabel || !awayLabel) {
+          if (LAST_32_BRACKET[m.id]) {
+            // Last 32: uit groepsstand + nummer-3 selectie
+            const slot = LAST_32_BRACKET[m.id];
+            if (!homeLabel) {
+              const { team, preliminary } = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats, m.id, "home", thirdAssignment);
+              homeLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+              if (preliminary) isPreliminary = true;
+            }
+            if (!awayLabel) {
+              const { team, preliminary } = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats, m.id, "away", thirdAssignment);
+              awayLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+              if (preliminary) isPreliminary = true;
+            }
+          } else if (KNOCKOUT_BRACKET[m.id]) {
+            // Last 16 en verder: uit winnaar/verliezer van eerdere wedstrijden
+            const b = KNOCKOUT_BRACKET[m.id];
+            if (!homeLabel) {
+              const team = resolveRoundTeam(b.home.source, b.home.winner, existing, thirdAssignment, predictedStandings, predictedTeamStats);
+              homeLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+              if (team) isPreliminary = true;
+            }
+            if (!awayLabel) {
+              const team = resolveRoundTeam(b.away.source, b.away.winner, existing, thirdAssignment, predictedStandings, predictedTeamStats);
+              awayLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+              if (team) isPreliminary = true;
+            }
           }
         }
         homeLabel = homeLabel || "?";
@@ -676,24 +693,41 @@ function updateKnockoutTeamLabels() {
   const { standings: predicted, teamStats } = calculatePredictedGroupData(currentPreds);
   const currentThirdAssignment = computeThirdAssignment(currentThirdAdv, predicted);
 
-  // Update alle Last 32 match-rijen met voorspelde teamnamen
+  // Update alle knockout match-rijen met voorspelde teamnamen
+  const resolveCache = {};
   document.querySelectorAll(".match-row").forEach(row => {
     const inputs = row.querySelectorAll("input[data-match]");
     if (inputs.length === 0) return;
     const matchId = inputs[0]?.dataset.match;
-    if (!matchId || !LAST_32_BRACKET[matchId]) return;
+    if (!matchId) return;
 
-    const slot = LAST_32_BRACKET[matchId];
+    const m = matches[matchId];
+    if (!m || (m.homeTeam && m.awayTeam)) return; // al ingevuld via API
+
     const homeEl = row.querySelector(".team.home");
     const awayEl = row.querySelector(".team.away");
 
-    if (homeEl) {
-      const { team } = resolveBracketSlot(slot.home, predicted, teamStats, matchId, "home", currentThirdAssignment);
-      homeEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
-    }
-    if (awayEl) {
-      const { team } = resolveBracketSlot(slot.away, predicted, teamStats, matchId, "away", currentThirdAssignment);
-      awayEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+    if (LAST_32_BRACKET[matchId]) {
+      const slot = LAST_32_BRACKET[matchId];
+      if (homeEl) {
+        const { team } = resolveBracketSlot(slot.home, predicted, teamStats, matchId, "home", currentThirdAssignment);
+        homeEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+      }
+      if (awayEl) {
+        const { team } = resolveBracketSlot(slot.away, predicted, teamStats, matchId, "away", currentThirdAssignment);
+        awayEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+      }
+    } else if (KNOCKOUT_BRACKET[matchId]) {
+      const b = KNOCKOUT_BRACKET[matchId];
+      const currentPredsFull = readCurrentPreds();
+      if (homeEl) {
+        const team = resolveRoundTeam(b.home.source, b.home.winner, currentPredsFull, currentThirdAssignment, predicted, teamStats, resolveCache);
+        homeEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+      }
+      if (awayEl) {
+        const team = resolveRoundTeam(b.away.source, b.away.winner, currentPredsFull, currentThirdAssignment, predicted, teamStats, resolveCache);
+        awayEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+      }
     }
   });
 }
@@ -1314,6 +1348,76 @@ const LAST_32_BRACKET = {
   "537427": { home: {type:"winner",    group:"GROUP_J"}, away: {type:"runner-up", group:"GROUP_H"} },
   "537430": { home: {type:"winner",    group:"GROUP_K"}, away: {type:"third", groups:["D","E","I","J","L"]} },
 };
+
+// Volledige knockout bracket: welke match levert de home/away voor de volgende ronde
+const KNOCKOUT_BRACKET = {
+  // Last 16 (match 89–96)
+  "537376": { home: { source: "537415", winner: true  }, away: { source: "537416", winner: true  } }, // M89: W74 vs W77
+  "537375": { home: { source: "537417", winner: true  }, away: { source: "537418", winner: true  } }, // M90: W73 vs W75
+  "537377": { home: { source: "537423", winner: true  }, away: { source: "537424", winner: true  } }, // M91: W76 vs W78
+  "537378": { home: { source: "537425", winner: true  }, away: { source: "537426", winner: true  } }, // M92: W79 vs W80
+  "537379": { home: { source: "537419", winner: true  }, away: { source: "537420", winner: true  } }, // M93: W83 vs W84
+  "537380": { home: { source: "537421", winner: true  }, away: { source: "537422", winner: true  } }, // M94: W81 vs W82
+  "537381": { home: { source: "537427", winner: true  }, away: { source: "537428", winner: true  } }, // M95: W86 vs W88
+  "537382": { home: { source: "537429", winner: true  }, away: { source: "537430", winner: true  } }, // M96: W85 vs W87
+  // Kwartfinales (match 97–100)
+  "537383": { home: { source: "537376", winner: true  }, away: { source: "537375", winner: true  } }, // M97: W89 vs W90
+  "537384": { home: { source: "537379", winner: true  }, away: { source: "537380", winner: true  } }, // M98: W93 vs W94
+  "537385": { home: { source: "537377", winner: true  }, away: { source: "537378", winner: true  } }, // M99: W91 vs W92
+  "537386": { home: { source: "537381", winner: true  }, away: { source: "537382", winner: true  } }, // M100: W95 vs W96
+  // Halve finales (match 101–102)
+  "537387": { home: { source: "537383", winner: true  }, away: { source: "537384", winner: true  } }, // M101: W97 vs W98
+  "537388": { home: { source: "537385", winner: true  }, away: { source: "537386", winner: true  } }, // M102: W99 vs W100
+  // Troostfinale (match 103)
+  "537389": { home: { source: "537387", winner: false }, away: { source: "537388", winner: false } }, // M103: L101 vs L102
+  // Finale (match 104)
+  "537390": { home: { source: "537387", winner: true  }, away: { source: "537388", winner: true  } }, // M104: W101 vs W102
+};
+
+// Bepaal de winnaar (of verliezer) van een wedstrijd op basis van de voorspelling
+function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predStandings, tStats, cache = {}) {
+  const key = `${sourceMatchId}-${isWinner ? "W" : "L"}`;
+  if (cache[key] !== undefined) return cache[key];
+
+  const m = matches[sourceMatchId];
+  if (!m) return (cache[key] = null);
+
+  // Teams bepalen
+  let home, away;
+  if (m.homeTeam && m.awayTeam) {
+    home = m.homeTeam;
+    away = m.awayTeam;
+  } else if (LAST_32_BRACKET[sourceMatchId]) {
+    const slot = LAST_32_BRACKET[sourceMatchId];
+    home = resolveBracketSlot(slot.home, predStandings, tStats, sourceMatchId, "home", thirdAssignment).team;
+    away = resolveBracketSlot(slot.away, predStandings, tStats, sourceMatchId, "away", thirdAssignment).team;
+  } else if (KNOCKOUT_BRACKET[sourceMatchId]) {
+    const b = KNOCKOUT_BRACKET[sourceMatchId];
+    home = resolveRoundTeam(b.home.source, b.home.winner, preds, thirdAssignment, predStandings, tStats, cache);
+    away = resolveRoundTeam(b.away.source, b.away.winner, preds, thirdAssignment, predStandings, tStats, cache);
+  }
+  if (!home || !away) return (cache[key] = null);
+
+  // Winnaar bepalen uit voorspelling
+  const pred = preds[sourceMatchId];
+  if (!pred || pred.home === undefined || pred.home === "") return (cache[key] = null);
+  const ph = parseInt(pred.home), pa = parseInt(pred.away);
+  if (isNaN(ph) || isNaN(pa)) return (cache[key] = null);
+
+  let winner, loser;
+  if (ph !== pa) {
+    winner = ph > pa ? home : away;
+    loser  = ph > pa ? away : home;
+  } else if (pred.penalty && pred.penaltyWinner) {
+    winner = pred.penaltyWinner === "home" ? home : away;
+    loser  = pred.penaltyWinner === "home" ? away : home;
+  } else {
+    return (cache[key] = null); // gelijkspel zonder penalty-keuze
+  }
+
+  cache[key] = isWinner ? winner : loser;
+  return cache[key];
+}
 
 // Bereken de correcte 1-op-1 toewijzing van de 8 geselecteerde nummer-3 landen
 // aan de 8 bracket-slots via greedy bipartite matching (meest beperkte slot eerst).
