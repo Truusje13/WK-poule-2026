@@ -666,6 +666,7 @@ async function autoSave() {
 
 function readCurrentPreds() {
   const currentPreds = {};
+  // Score-invoer
   document.querySelectorAll("#predictions-container input[type=number]").forEach(input => {
     const matchId = input.dataset.match;
     const side    = input.dataset.side;
@@ -673,6 +674,16 @@ function readCurrentPreds() {
     if (val !== "") {
       if (!currentPreds[matchId]) currentPreds[matchId] = {};
       currentPreds[matchId][side] = parseInt(val);
+    }
+  });
+  // Penalty-invoer (ook meenemen voor bracket-resolutie)
+  document.querySelectorAll("#predictions-container input[type=checkbox][data-type='penalty']").forEach(cb => {
+    const matchId = cb.dataset.match;
+    if (cb.checked) {
+      if (!currentPreds[matchId]) currentPreds[matchId] = {};
+      currentPreds[matchId].penalty = true;
+      const selectedBtn = document.querySelector(`.pen-btn.selected[data-match="${matchId}"]`);
+      currentPreds[matchId].penaltyWinner = selectedBtn?.dataset.side ?? null;
     }
   });
   return currentPreds;
@@ -1592,13 +1603,24 @@ window.togglePenaltyWinner = function(checkbox) {
   const matchId   = checkbox.dataset.match;
   const winnerDiv = document.getElementById(`pen-winner-${matchId}`);
   if (winnerDiv) winnerDiv.classList.toggle("hidden", !checkbox.checked);
+  // Auto-save en bracket bijwerken
+  triggerPenaltySave();
 };
 
 window.selectPenaltyWinner = function(btn) {
   const matchId = btn.dataset.match;
   document.querySelectorAll(`.pen-btn[data-match="${matchId}"]`).forEach(b => b.classList.remove("selected"));
   btn.classList.add("selected");
+  // Auto-save en bracket bijwerken
+  triggerPenaltySave();
 };
+
+function triggerPenaltySave() {
+  updateKnockoutTeamLabels();
+  showAutoSaveStatus("⏳ Wordt opgeslagen...");
+  clearTimeout(window._penaltySaveTimer);
+  window._penaltySaveTimer = setTimeout(() => autoSave(), 1000);
+}
 
 window.showView = showView;
 window.renderPredictions = renderPredictions;
