@@ -30,6 +30,8 @@ const SCORING = {
   outcome: 3,        // juiste winnaar of gelijkspel
   advancement: 2,    // land correct in top 2 groep
   position: 2,       // land ook op juiste positie (1e of 2e)
+  third: 2,          // correct voorspeld als nummer 3 in de groep
+  thirdAdvance: 2,   // dat land gaat ook echt door als beste nummer 3
   penalty: 3,        // correct voorspelde penalty-winnaar
   round: {           // bonus per correct voorspelde winnaar in knockoutronde
     LAST_32:        3,
@@ -317,8 +319,14 @@ async function renderPredictions() {
     }
   }
 
-  const predSnap = await get(ref(db, `predictions/${currentUser.id}`));
-  const existing = predSnap.exists() ? predSnap.val() : {};
+  const [predSnap, thirdPlaceSnap, thirdAdvSnap2] = await Promise.all([
+    get(ref(db, `predictions/${currentUser.id}`)),
+    get(ref(db, `thirdplace/${currentUser.id}`)),
+    get(ref(db, `thirdadvance/${currentUser.id}`)),
+  ]);
+  const existing        = predSnap.exists()       ? predSnap.val()       : {};
+  const thirdPlaceData  = thirdPlaceSnap.exists()  ? thirdPlaceSnap.val() : {};
+  const thirdAdvData    = thirdAdvSnap2.exists()   ? thirdAdvSnap2.val()  : [];
 
   // Groepeer per ronde, daarbinnen per groep (alleen groepsfase)
   const stages = {};
@@ -379,15 +387,18 @@ async function renderPredictions() {
         // Teamnamen eerst bepalen (worden ook gebruikt in penaltyHtml)
         let homeLabel = m.homeTeam ? t(m.homeTeam) : null;
         let awayLabel = m.awayTeam ? t(m.awayTeam) : null;
+        let isPreliminary = false;
         if ((!homeLabel || !awayLabel) && LAST_32_BRACKET[m.id]) {
           const slot = LAST_32_BRACKET[m.id];
           if (!homeLabel) {
-            const resolved = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats);
-            homeLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
+            const { team, preliminary } = resolveBracketSlot(slot.home, predictedStandings, predictedTeamStats, thirdPlaceData, thirdAdvData);
+            homeLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+            if (preliminary) isPreliminary = true;
           }
           if (!awayLabel) {
-            const resolved = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats);
-            awayLabel = resolved ? `<span class="predicted-name">${t(resolved)}</span>` : "?";
+            const { team, preliminary } = resolveBracketSlot(slot.away, predictedStandings, predictedTeamStats, thirdPlaceData, thirdAdvData);
+            awayLabel = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
+            if (preliminary) isPreliminary = true;
           }
         }
         homeLabel = homeLabel || "?";
@@ -446,13 +457,16 @@ async function renderPredictions() {
 
 
         html += `
-          <div class="match-row${isFinished ? " finished" : ""}${isKnockout ? " knockout-row" : ""}">
+          <div class="match-row${isFinished ? " finished" : ""}${isKnockout ? " knockout-row" : ""}${isPreliminary ? " preliminary" : ""}">
             <div class="teams">
               <span class="team home">${homeLabel}</span>
               <div class="score-input">${scoreHtml}</div>
               <span class="team away">${awayLabel}</span>
             </div>
-            <div class="match-meta">${metaHtml}</div>
+            <div class="match-meta">
+              ${isPreliminary ? `<span class="preliminary-badge">voorlopig</span>` : ""}
+              ${metaHtml}
+            </div>
             ${penaltyHtml}
           </div>`;
       }
@@ -475,6 +489,103 @@ async function renderPredictions() {
     }
   }
 
+  // ── Nummer-3 sectie ──
+  const teamsPerGroup   = getTeamsPerGroup();
+  const sortedGroups    = Object.keys(teamsPerGroup).sort();
+  const thirdSnap       = await get(ref(db, `thirdplace/${currentUser.id}`));
+  const thirdAdvSnap    = await get(ref(db, `thirdadvance/${currentUser.id}`));
+  const savedThird      = thirdSnap.exists()    ? thirdSnap.val()    : {};
+  const savedThirdAdv   = thirdAdvSnap.exists() ? thirdAdvSnap.val() : [];
+  const actualThirds    = calculateGroupStandings();  // werkelijke groepsstanden
+  const actualAdvThirds = getActualAdvancingThirds();
+
+  if (sortedGroups.length > 0) {
+    html += `<div class="stage-header">Nummer 3 per groep &amp; doorkomst</div>
+    <div class="advancement-intro">
+      Voorspel welk land <strong>nummer 3</strong> wordt in elke groep, en kies daarna
+      welke <strong>8 van de 12</strong> nummers 3 doorgaan.
+      <br><strong>+${SCORING.third} punten</strong> per correct nummer 3 •
+      <strong>+${SCORING.thirdAdvance} punten</strong> als dat land ook echt doorkomt.
+    </div>`;
+
+    // Stap 1: nummer 3 per groep
+    html += `<div class="third-grid">`;
+    for (const group of sortedGroups) {
+      const label  = group.replace("GROUP_", "Groep ");
+      const teams  = teamsPerGroup[group];
+      const saved  = savedThird[group] ?? "";
+      const actual = actualThirds[group]?.[2] ?? null;
+      const known  = actual !== null;
+      const correct = known && saved === actual;
+      const wrong   = known && saved && saved !== actual;
+      const advActual = actual && actualAdvThirds.has(actual);
+      const advPred   = savedThirdAdv.includes(saved);
+
+      let badge = "";
+      if (known && saved) {
+        if (correct && advActual && advPred)       badge = `<span class="adv-badge adv-correct">✅ 4pts</span>`;
+        else if (correct && advActual)             badge = `<span class="adv-badge adv-good">✓ 2pts (door)</span>`;
+        else if (correct)                          badge = `<span class="adv-badge adv-good">✓ 2pts</span>`;
+        else if (wrong)                            badge = `<span class="adv-badge adv-wrong">✗</span>`;
+      }
+
+      html += `<div class="third-group-card">
+        <div class="third-group-label">${label}</div>
+        ${locked
+          ? `<div class="third-locked">${saved ? t(saved) : "–"} ${badge}</div>`
+          : `<select class="third-select" data-group="${group}">
+              <option value="">– kies nummer 3 –</option>
+              ${teams.map(team => `<option value="${team}" ${team === saved ? "selected" : ""}>${t(team)}</option>`).join("")}
+             </select>
+             ${badge}`
+        }
+      </div>`;
+    }
+    html += `</div>`;
+
+    // Stap 2: welke 8 nummers 3 gaan door
+    html += `<div class="third-advance-section">
+      <div class="third-advance-title">Welke 8 van de 12 nummers 3 gaan door?</div>
+      <div class="third-advance-intro">
+        Kies op basis van jouw ingevulde nummer-3-voorspellingen hierboven.
+        Je kunt maximaal 8 landen selecteren.
+      </div>
+      <div class="third-advance-grid" id="third-advance-grid">`;
+
+    for (const group of sortedGroups) {
+      const predicted3rd = savedThird[group];
+      if (!predicted3rd) continue;
+      const isSelected = savedThirdAdv.includes(predicted3rd);
+      const groupLabel  = group.replace("GROUP_", "Groep ");
+      const advActual   = actualAdvThirds.has(predicted3rd);
+      const actualThird = actualThirds[group]?.[2];
+      const known       = actualThird !== null;
+
+      let cls = isSelected ? "selected" : "";
+      let badge = "";
+      if (known) {
+        if (advActual && isSelected) badge = `<span class="adv-badge adv-correct" style="font-size:0.7rem">✅</span>`;
+        else if (advActual)         badge = `<span class="adv-badge adv-good" style="font-size:0.7rem">➡️</span>`;
+        else if (isSelected)        badge = `<span class="adv-badge adv-wrong" style="font-size:0.7rem">✗</span>`;
+      }
+
+      html += locked
+        ? `<div class="third-adv-team ${isSelected ? "selected" : ""}">
+            <span>${groupLabel}: ${t(predicted3rd)}</span>${badge}
+           </div>`
+        : `<label class="third-adv-team ${cls}">
+            <input type="checkbox" class="third-adv-cb" data-team="${predicted3rd}"
+              ${isSelected ? "checked" : ""}
+              onchange="updateThirdAdvCount()" />
+            <span>${groupLabel}: ${t(predicted3rd)}</span>${badge}
+           </label>`;
+    }
+
+    html += `</div>
+      <div class="third-adv-count" id="third-adv-count"></div>
+    </div>`;
+  }
+
   // Groepsfase doorkomst-overzicht
   html += `
     <div class="stage-header">Jouw voorspelde doorkomst naar de Last 32</div>
@@ -490,7 +601,8 @@ async function renderPredictions() {
 
   container.innerHTML = html;
 
-  // Initialiseer het doorkomst-overzicht en koppel realtime updates + auto-opslaan
+  // Initialiseer tellers en overzichten
+  updateThirdAdvCount();
   updatePredictedAdvancement();
 
   let autoSaveTimer = null;
@@ -536,14 +648,33 @@ function collectPredictionData() {
   return data;
 }
 
+function collectThirdPlaceData() {
+  const thirdplace = {};
+  document.querySelectorAll(".third-select").forEach(sel => {
+    if (sel.value) thirdplace[sel.dataset.group] = sel.value;
+  });
+
+  const thirdadvance = [];
+  document.querySelectorAll(".third-adv-cb:checked").forEach(cb => {
+    thirdadvance.push(cb.dataset.team);
+  });
+
+  return { thirdplace, thirdadvance };
+}
+
 async function autoSave() {
   const inputs = document.querySelectorAll("#predictions-container input[type=number]");
   if (inputs.length === 0) return;
 
   const data = collectPredictionData();
 
+  const { thirdplace, thirdadvance } = collectThirdPlaceData();
   try {
-    await set(ref(db, `predictions/${currentUser.id}`), data);
+    await Promise.all([
+      set(ref(db, `predictions/${currentUser.id}`), data),
+      set(ref(db, `thirdplace/${currentUser.id}`), thirdplace),
+      set(ref(db, `thirdadvance/${currentUser.id}`), thirdadvance),
+    ]);
     await recalculateStandings(currentUser.id);
     showAutoSaveStatus("✅ Automatisch opgeslagen");
     setTimeout(() => showAutoSaveStatus("💾 Voorspellingen opslaan"), 3000);
@@ -583,16 +714,12 @@ function updateKnockoutTeamLabels() {
     const awayEl = row.querySelector(".team.away");
 
     if (homeEl) {
-      const resolved = resolveBracketSlot(slot.home, predicted, teamStats);
-      homeEl.innerHTML = resolved
-        ? `<span class="predicted-name">${t(resolved)}</span>`
-        : "?";
+      const { team } = resolveBracketSlot(slot.home, predicted, teamStats, {}, []);
+      homeEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
     }
     if (awayEl) {
-      const resolved = resolveBracketSlot(slot.away, predicted, teamStats);
-      awayEl.innerHTML = resolved
-        ? `<span class="predicted-name">${t(resolved)}</span>`
-        : "?";
+      const { team } = resolveBracketSlot(slot.away, predicted, teamStats, {}, []);
+      awayEl.innerHTML = team ? `<span class="predicted-name">${t(team)}</span>` : "?";
     }
   });
 }
@@ -699,8 +826,13 @@ async function savePredictions() {
 
   const data = collectPredictionData();
 
+  const { thirdplace, thirdadvance } = collectThirdPlaceData();
   try {
-    await set(ref(db, `predictions/${currentUser.id}`), data);
+    await Promise.all([
+      set(ref(db, `predictions/${currentUser.id}`), data),
+      set(ref(db, `thirdplace/${currentUser.id}`), thirdplace),
+      set(ref(db, `thirdadvance/${currentUser.id}`), thirdadvance),
+    ]);
     await recalculateStandings(currentUser.id);
     btn.textContent = "✅ Opgeslagen!";
     setTimeout(() => {
@@ -726,16 +858,20 @@ async function recalculateAllStandings() {
 }
 
 async function recalculateStandings(participantId) {
-  const [predSnap, partSnap] = await Promise.all([
+  const [predSnap, partSnap, thirdSnap, thirdAdvSnap] = await Promise.all([
     get(ref(db, `predictions/${participantId}`)),
-    get(ref(db, `participants/${participantId}`))
+    get(ref(db, `participants/${participantId}`)),
+    get(ref(db, `thirdplace/${participantId}`)),
+    get(ref(db, `thirdadvance/${participantId}`)),
   ]);
   if (!partSnap.exists()) return;
 
-  const preds = predSnap.exists() ? predSnap.val() : {};
-  const name  = partSnap.val().name;
+  const preds       = predSnap.exists()    ? predSnap.val()    : {};
+  const thirdPreds  = thirdSnap.exists()   ? thirdSnap.val()   : {};
+  const thirdAdvPreds = thirdAdvSnap.exists() ? thirdAdvSnap.val() : [];
+  const name        = partSnap.val().name;
 
-  let points = 0, exactCount = 0, outcomeCount = 0, advancementPts = 0, roundBonusPts = 0;
+  let points = 0, exactCount = 0, outcomeCount = 0, advancementPts = 0, roundBonusPts = 0, thirdPts = 0;
 
   // ── 1. Wedstrijd-punten + knockout-rondebonus ──
   for (const [matchId, m] of Object.entries(matches)) {
@@ -796,8 +932,28 @@ async function recalculateStandings(participantId) {
     }
   }
 
+  // ── 3. Nummer-3 punten ──
+  const actualGroupStand = calculateGroupStandings();
+  const actualAdvThirds  = getActualAdvancingThirds();
+
+  if (Object.keys(actualGroupStand).length > 0) {
+    for (const [group, predictedTeam] of Object.entries(thirdPreds)) {
+      const actualTeam = actualGroupStand[group]?.[2];
+      if (!actualTeam || !predictedTeam) continue;
+      if (predictedTeam === actualTeam) {
+        points   += SCORING.third;
+        thirdPts += SCORING.third;
+        // Extra als dit land ook daadwerkelijk doorkomt én in jouw lijstje zit
+        if (actualAdvThirds.has(actualTeam) && thirdAdvPreds.includes(predictedTeam)) {
+          points   += SCORING.thirdAdvance;
+          thirdPts += SCORING.thirdAdvance;
+        }
+      }
+    }
+  }
+
   await set(ref(db, `standings/${participantId}`), {
-    name, points, exactCount, outcomeCount, advancementPts, roundBonusPts, updatedAt: Date.now()
+    name, points, exactCount, outcomeCount, advancementPts, roundBonusPts, thirdPts, updatedAt: Date.now()
   });
 }
 
@@ -833,6 +989,7 @@ function renderStandings() {
           <th title="Juiste uitslag">✓ Uitslag</th>
           <th title="Doorkomst & positie">🌍 Door</th>
           <th title="Knockout rondebonus">🏆 Bonus</th>
+          <th title="Nummer 3 voorspellingen">3️⃣ Nr3</th>
         </tr>
       </thead>
       <tbody>`;
@@ -848,6 +1005,7 @@ function renderStandings() {
         <td>${s.outcomeCount}</td>
         <td>${s.advancementPts ?? 0}</td>
         <td>${s.roundBonusPts ?? 0}</td>
+        <td>${s.thirdPts ?? 0}</td>
       </tr>`;
     });
 
@@ -1118,6 +1276,18 @@ function t(name) {
   return TEAM_NL[name] ?? name;
 }
 
+// Bepaal welke 3e-plaatsers daadwerkelijk doorgaan (staan in Last 32 op een "third"-slot)
+function getActualAdvancingThirds() {
+  const thirds = new Set();
+  for (const [matchId, slot] of Object.entries(LAST_32_BRACKET)) {
+    const m = matches[matchId];
+    if (!m) continue;
+    if (slot.home.type === "third" && m.homeTeam) thirds.add(m.homeTeam);
+    if (slot.away.type === "third" && m.awayTeam) thirds.add(m.awayTeam);
+  }
+  return thirds;
+}
+
 // WK 2026 Last 32 bracket: welke groepspositie speelt in welke wedstrijd
 // Gebaseerd op het officiële FIFA-schema (matchnummers 73–88)
 const LAST_32_BRACKET = {
@@ -1140,13 +1310,20 @@ const LAST_32_BRACKET = {
 };
 
 // Bepaal de voorspelde teamnaam voor een bracket-slot op basis van groepsstand
-function resolveBracketSlot(slot, predictedStandings, teamStats) {
-  if (slot.type === "winner")    return predictedStandings[slot.group]?.[0] ?? null;
-  if (slot.type === "runner-up") return predictedStandings[slot.group]?.[1] ?? null;
+// thirdPredictions = { GROUP_A: "teamName", ... } (opgeslagen nummer-3 voorspellingen)
+// thirdAdvPredictions = ["team1", ...] (voorspelde 8 doorgaande nummers 3)
+function resolveBracketSlot(slot, predictedStandings, teamStats, thirdPreds, thirdAdvPreds) {
+  if (slot.type === "winner")    return { team: predictedStandings[slot.group]?.[0] ?? null, preliminary: false };
+  if (slot.type === "runner-up") return { team: predictedStandings[slot.group]?.[1] ?? null, preliminary: false };
   if (slot.type === "third") {
-    return `beste 3e uit groep ${slot.groups.join("/")}`;
+    // Zoek de gebruikersvoorspelling voor de 3e-plaatsers uit de opgegeven groepen
+    // die ook in hun doorkomstlijstje staan
+    const candidates = slot.groups
+      .map(g => thirdPreds?.[`GROUP_${g}`])
+      .filter(team => team && thirdAdvPreds?.includes(team));
+    return { team: candidates[0] ?? null, preliminary: true };
   }
-  return null;
+  return { team: null, preliminary: false };
 }
 
 const STAGE_LABEL = {
@@ -1242,6 +1419,25 @@ async function deleteParticipant(id, name) {
 // ============================================================
 // GLOBALS (aangeroepen vanuit HTML onclick)
 // ============================================================
+
+window.updateThirdAdvCount = function() {
+  const checked = document.querySelectorAll(".third-adv-cb:checked").length;
+  const all     = document.querySelectorAll(".third-adv-cb");
+  const counter = document.getElementById("third-adv-count");
+  if (counter) {
+    counter.textContent = `${checked} / 8 geselecteerd`;
+    counter.className = `third-adv-count ${checked > 8 ? "over" : checked === 8 ? "done" : ""}`;
+  }
+  // Max 8: blokkeer extra selecties
+  all.forEach(cb => {
+    if (!cb.checked) cb.disabled = checked >= 8;
+  });
+  // Update visuele staat
+  document.querySelectorAll(".third-adv-team label, label.third-adv-team").forEach(label => {
+    const cb = label.querySelector("input");
+    if (cb) label.classList.toggle("selected", cb.checked);
+  });
+};
 
 window.togglePenaltyWinner = function(checkbox) {
   const matchId   = checkbox.dataset.match;

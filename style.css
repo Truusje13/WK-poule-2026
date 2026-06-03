@@ -678,6 +678,109 @@ main {
 .pred-ko-team.correct { background: #d4edda; color: #155724; font-weight: 600; }
 .pred-ko-team.wrong  { background: #fde8e8; color: #922; text-decoration: line-through; }
 
+/* ===== NUMMER 3 SECTIE ===== */
+.third-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.third-group-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+}
+
+.third-group-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--orange-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+
+.third-group-card select {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 2px solid var(--gray);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  background: white;
+}
+
+.third-group-card select:focus { outline: none; border-color: var(--orange); }
+.third-locked { font-size: 0.88rem; font-weight: 600; color: var(--dark); }
+
+.third-advance-section {
+  background: white;
+  border-radius: var(--radius);
+  padding: 1rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  margin-bottom: 1rem;
+}
+
+.third-advance-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--orange-dark);
+  margin-bottom: 0.3rem;
+}
+
+.third-advance-intro {
+  font-size: 0.82rem;
+  color: #666;
+  margin-bottom: 0.75rem;
+}
+
+.third-advance-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.third-adv-team {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border: 2px solid var(--gray);
+  border-radius: 20px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  background: white;
+  transition: all 0.15s;
+}
+
+.third-adv-team input { display: none; }
+.third-adv-team:hover:not([disabled]) { border-color: var(--orange-light); background: var(--orange-pale); }
+.third-adv-team.selected { border-color: var(--orange); background: var(--orange); color: white; font-weight: 600; }
+
+.third-adv-count {
+  font-size: 0.82rem;
+  color: #888;
+  margin-top: 0.25rem;
+}
+.third-adv-count.done { color: #155724; font-weight: 600; }
+.third-adv-count.over { color: #922; font-weight: 600; }
+
+/* Voorlopig badge */
+.preliminary { background: #fffbf0; }
+.preliminary-badge {
+  font-size: 0.68rem;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* ===== PENALTY SECTIE ===== */
 .knockout-row { flex-wrap: wrap; }
 
