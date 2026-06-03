@@ -418,7 +418,7 @@ async function renderPredictions() {
                 <input type="checkbox" data-match="${m.id}" data-type="penalty"
                   ${pred.penalty ? "checked" : ""}
                   onchange="togglePenaltyWinner(this)" />
-                🥅 Naar penalty's
+                🥅 Na penalty's
               </label>
               <div class="penalty-winner ${pred.penalty ? "" : "hidden"}" id="pen-winner-${m.id}">
                 <span class="pen-label">Wie wint?</span>
