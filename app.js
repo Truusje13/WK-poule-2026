@@ -784,13 +784,20 @@ function updatePredictedAdvancement() {
     if (sortedGroups.length === 0) {
       grid.innerHTML = `<p class="predicted-empty">Vul groepsscores in om de doorkomst te zien.</p>`;
     } else {
+      const selectedThirds = readCurrentThirdAdvData();
       let html = "";
+
       for (const group of sortedGroups) {
-        const label = group.replace("GROUP_", "Groep ");
-        const top2  = predicted[group].slice(0, 2);
+        const label  = group.replace("GROUP_", "Groep ");
+        const top3   = predicted[group].slice(0, 3);
+        const third  = top3[2];
+        const thirdAdvances = third && selectedThirds.includes(third);
+
         html += `<div class="predicted-group"><div class="predicted-group-label">${label}</div>`;
+
+        // 1e en 2e plaats
         for (let i = 0; i < 2; i++) {
-          const team    = top2[i];
+          const team    = top3[i];
           const pos     = i === 0 ? "🥇" : "🥈";
           const correct = actual.size > 0 && team && actual.has(team);
           const wrong   = actual.size > 0 && team && !actual.has(team);
@@ -802,23 +809,18 @@ function updatePredictedAdvancement() {
                </div>`
             : `<div class="predicted-team empty">– nog niet bepaald</div>`;
         }
-        html += `</div>`;
-      }
 
-      // Geselecteerde nummers 3
-      const selectedThirds = readCurrentThirdAdvData();
-      if (selectedThirds.length > 0) {
-        html += `<div class="predicted-group thirds-card">
-          <div class="predicted-group-label">Nummers 3</div>`;
-        for (const team of selectedThirds) {
-          const correct = actual.size > 0 && actual.has(team);
-          const wrong   = actual.size > 0 && !actual.has(team);
+        // 3e plaats tonen als die geselecteerd is als doorgaand
+        if (thirdAdvances) {
+          const correct = actual.size > 0 && actual.has(third);
+          const wrong   = actual.size > 0 && !actual.has(third);
           html += `<div class="predicted-team ${correct ? "correct" : wrong ? "wrong" : ""}">
             <span class="pred-pos">3️⃣</span>
-            <span class="pred-name">${t(team)}</span>
+            <span class="pred-name">${t(third)}</span>
             ${correct ? `<span class="pred-check">✅</span>` : wrong ? `<span class="pred-check">✗</span>` : ""}
           </div>`;
         }
+
         html += `</div>`;
       }
 
