@@ -563,17 +563,17 @@ async function renderPredictions() {
       html += `</div>
         <div class="third-adv-count" id="third-adv-count"></div>
       </div>`;
+
+      // Doorkomst top-2 overzicht — direct na groepsfase
+      html += `
+        <div class="stage-header">Jouw voorspelde doorkomst naar de Last 32</div>
+        <div class="predicted-advancement-intro">
+          Op basis van jouw ingevulde groepsscores komen deze landen door.
+          Wordt automatisch bijgewerkt terwijl je scores invult.
+        </div>
+        <div id="predicted-advancement-grid" class="predicted-grid"></div>`;
     }
   }
-
-  // Groepsfase doorkomst-overzicht
-  html += `
-    <div class="stage-header">Jouw voorspelde doorkomst naar de Last 32</div>
-    <div class="predicted-advancement-intro">
-      Op basis van jouw ingevulde groepsscores komen deze landen door.
-      Wordt automatisch bijgewerkt terwijl je scores invult.
-    </div>
-    <div id="predicted-advancement-grid" class="predicted-grid"></div>`;
 
   if (!locked) {
     html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
