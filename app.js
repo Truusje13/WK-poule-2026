@@ -473,6 +473,93 @@ async function renderPredictions() {
 
       html += "</div>";
 
+      // Direct na de groepsfase: nummer-3 sectie
+      if (stage === "GROUP_STAGE") {
+        const teamsPerGroupLocal = getTeamsPerGroup();
+        const sortedGroupsLocal  = Object.keys(teamsPerGroupLocal).sort();
+        const actualThirdsLocal  = calculateGroupStandings();
+        const actualAdvThirdsLocal = getActualAdvancingThirds();
+
+        html += `<div class="stage-header">Nummer 3 per groep &amp; doorkomst</div>
+        <div class="advancement-intro">
+          Voorspel welk land <strong>nummer 3</strong> wordt in elke groep, en kies daarna
+          welke <strong>8 van de 12</strong> nummers 3 doorgaan.
+          <br><strong>+${SCORING.third} punten</strong> per correct nummer 3 •
+          <strong>+${SCORING.thirdAdvance} punten</strong> als dat land ook echt doorkomt.
+        </div>`;
+
+        html += `<div class="third-grid">`;
+        for (const group of sortedGroupsLocal) {
+          const label  = group.replace("GROUP_", "Groep ");
+          const teams  = teamsPerGroupLocal[group];
+          const saved  = thirdPlaceData[group] ?? "";
+          const actual = actualThirdsLocal[group]?.[2] ?? null;
+          const known  = actual !== null;
+          const correct = known && saved === actual;
+          const wrong   = known && saved && saved !== actual;
+          const advActual = actual && actualAdvThirdsLocal.has(actual);
+          const advPred   = thirdAdvData.includes(saved);
+
+          let badge = "";
+          if (known && saved) {
+            if (correct && advActual && advPred)   badge = `<span class="adv-badge adv-correct">✅ 4pts</span>`;
+            else if (correct && advActual)         badge = `<span class="adv-badge adv-good">✓ 2pts (door)</span>`;
+            else if (correct)                      badge = `<span class="adv-badge adv-good">✓ 2pts</span>`;
+            else if (wrong)                        badge = `<span class="adv-badge adv-wrong">✗</span>`;
+          }
+
+          html += `<div class="third-group-card">
+            <div class="third-group-label">${label}</div>
+            ${locked
+              ? `<div class="third-locked">${saved ? t(saved) : "–"} ${badge}</div>`
+              : `<select class="third-select" data-group="${group}">
+                  <option value="">– kies nummer 3 –</option>
+                  ${teams.map(team => `<option value="${team}" ${team === saved ? "selected" : ""}>${t(team)}</option>`).join("")}
+                 </select>
+                 ${badge}`
+            }
+          </div>`;
+        }
+        html += `</div>`;
+
+        html += `<div class="third-advance-section">
+          <div class="third-advance-title">Welke 8 van de 12 nummers 3 gaan door?</div>
+          <div class="third-advance-intro">Kies op basis van jouw ingevulde nummer-3-voorspellingen hierboven. Je kunt maximaal 8 landen selecteren.</div>
+          <div class="third-advance-grid" id="third-advance-grid">`;
+
+        for (const group of sortedGroupsLocal) {
+          const predicted3rd = thirdPlaceData[group];
+          if (!predicted3rd) continue;
+          const isSelected = thirdAdvData.includes(predicted3rd);
+          const groupLabel  = group.replace("GROUP_", "Groep ");
+          const advActual   = actualAdvThirdsLocal.has(predicted3rd);
+          const actualThird = actualThirdsLocal[group]?.[2];
+          const known       = actualThird !== null;
+
+          let badge = "";
+          if (known) {
+            if (advActual && isSelected) badge = `<span class="adv-badge adv-correct" style="font-size:0.7rem">✅</span>`;
+            else if (advActual)          badge = `<span class="adv-badge adv-good" style="font-size:0.7rem">➡️</span>`;
+            else if (isSelected)         badge = `<span class="adv-badge adv-wrong" style="font-size:0.7rem">✗</span>`;
+          }
+
+          html += locked
+            ? `<div class="third-adv-team ${isSelected ? "selected" : ""}">
+                <span>${groupLabel}: ${t(predicted3rd)}</span>${badge}
+               </div>`
+            : `<label class="third-adv-team ${isSelected ? "selected" : ""}">
+                <input type="checkbox" class="third-adv-cb" data-team="${predicted3rd}"
+                  ${isSelected ? "checked" : ""}
+                  onchange="updateThirdAdvCount()" />
+                <span>${groupLabel}: ${t(predicted3rd)}</span>${badge}
+               </label>`;
+        }
+
+        html += `</div>
+          <div class="third-adv-count" id="third-adv-count"></div>
+        </div>`;
+      }
+
       // Na elke knockoutronde een doorkomst-blok invoegen
       if (stage !== "GROUP_STAGE" && stage !== "FINAL" && stage !== "THIRD_PLACE") {
         const nextIdx = STAGE_ORDER.indexOf(stage) + 1;
@@ -487,103 +574,6 @@ async function renderPredictions() {
         }
       }
     }
-  }
-
-  // ── Nummer-3 sectie ──
-  const teamsPerGroup   = getTeamsPerGroup();
-  const sortedGroups    = Object.keys(teamsPerGroup).sort();
-  const thirdSnap       = await get(ref(db, `thirdplace/${currentUser.id}`));
-  const thirdAdvSnap    = await get(ref(db, `thirdadvance/${currentUser.id}`));
-  const savedThird      = thirdSnap.exists()    ? thirdSnap.val()    : {};
-  const savedThirdAdv   = thirdAdvSnap.exists() ? thirdAdvSnap.val() : [];
-  const actualThirds    = calculateGroupStandings();  // werkelijke groepsstanden
-  const actualAdvThirds = getActualAdvancingThirds();
-
-  if (sortedGroups.length > 0) {
-    html += `<div class="stage-header">Nummer 3 per groep &amp; doorkomst</div>
-    <div class="advancement-intro">
-      Voorspel welk land <strong>nummer 3</strong> wordt in elke groep, en kies daarna
-      welke <strong>8 van de 12</strong> nummers 3 doorgaan.
-      <br><strong>+${SCORING.third} punten</strong> per correct nummer 3 •
-      <strong>+${SCORING.thirdAdvance} punten</strong> als dat land ook echt doorkomt.
-    </div>`;
-
-    // Stap 1: nummer 3 per groep
-    html += `<div class="third-grid">`;
-    for (const group of sortedGroups) {
-      const label  = group.replace("GROUP_", "Groep ");
-      const teams  = teamsPerGroup[group];
-      const saved  = savedThird[group] ?? "";
-      const actual = actualThirds[group]?.[2] ?? null;
-      const known  = actual !== null;
-      const correct = known && saved === actual;
-      const wrong   = known && saved && saved !== actual;
-      const advActual = actual && actualAdvThirds.has(actual);
-      const advPred   = savedThirdAdv.includes(saved);
-
-      let badge = "";
-      if (known && saved) {
-        if (correct && advActual && advPred)       badge = `<span class="adv-badge adv-correct">✅ 4pts</span>`;
-        else if (correct && advActual)             badge = `<span class="adv-badge adv-good">✓ 2pts (door)</span>`;
-        else if (correct)                          badge = `<span class="adv-badge adv-good">✓ 2pts</span>`;
-        else if (wrong)                            badge = `<span class="adv-badge adv-wrong">✗</span>`;
-      }
-
-      html += `<div class="third-group-card">
-        <div class="third-group-label">${label}</div>
-        ${locked
-          ? `<div class="third-locked">${saved ? t(saved) : "–"} ${badge}</div>`
-          : `<select class="third-select" data-group="${group}">
-              <option value="">– kies nummer 3 –</option>
-              ${teams.map(team => `<option value="${team}" ${team === saved ? "selected" : ""}>${t(team)}</option>`).join("")}
-             </select>
-             ${badge}`
-        }
-      </div>`;
-    }
-    html += `</div>`;
-
-    // Stap 2: welke 8 nummers 3 gaan door
-    html += `<div class="third-advance-section">
-      <div class="third-advance-title">Welke 8 van de 12 nummers 3 gaan door?</div>
-      <div class="third-advance-intro">
-        Kies op basis van jouw ingevulde nummer-3-voorspellingen hierboven.
-        Je kunt maximaal 8 landen selecteren.
-      </div>
-      <div class="third-advance-grid" id="third-advance-grid">`;
-
-    for (const group of sortedGroups) {
-      const predicted3rd = savedThird[group];
-      if (!predicted3rd) continue;
-      const isSelected = savedThirdAdv.includes(predicted3rd);
-      const groupLabel  = group.replace("GROUP_", "Groep ");
-      const advActual   = actualAdvThirds.has(predicted3rd);
-      const actualThird = actualThirds[group]?.[2];
-      const known       = actualThird !== null;
-
-      let cls = isSelected ? "selected" : "";
-      let badge = "";
-      if (known) {
-        if (advActual && isSelected) badge = `<span class="adv-badge adv-correct" style="font-size:0.7rem">✅</span>`;
-        else if (advActual)         badge = `<span class="adv-badge adv-good" style="font-size:0.7rem">➡️</span>`;
-        else if (isSelected)        badge = `<span class="adv-badge adv-wrong" style="font-size:0.7rem">✗</span>`;
-      }
-
-      html += locked
-        ? `<div class="third-adv-team ${isSelected ? "selected" : ""}">
-            <span>${groupLabel}: ${t(predicted3rd)}</span>${badge}
-           </div>`
-        : `<label class="third-adv-team ${cls}">
-            <input type="checkbox" class="third-adv-cb" data-team="${predicted3rd}"
-              ${isSelected ? "checked" : ""}
-              onchange="updateThirdAdvCount()" />
-            <span>${groupLabel}: ${t(predicted3rd)}</span>${badge}
-           </label>`;
-    }
-
-    html += `</div>
-      <div class="third-adv-count" id="third-adv-count"></div>
-    </div>`;
   }
 
   // Groepsfase doorkomst-overzicht
