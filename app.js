@@ -804,6 +804,24 @@ function updatePredictedAdvancement() {
         }
         html += `</div>`;
       }
+
+      // Geselecteerde nummers 3
+      const selectedThirds = readCurrentThirdAdvData();
+      if (selectedThirds.length > 0) {
+        html += `<div class="predicted-group thirds-card">
+          <div class="predicted-group-label">Nummers 3</div>`;
+        for (const team of selectedThirds) {
+          const correct = actual.size > 0 && actual.has(team);
+          const wrong   = actual.size > 0 && !actual.has(team);
+          html += `<div class="predicted-team ${correct ? "correct" : wrong ? "wrong" : ""}">
+            <span class="pred-pos">3️⃣</span>
+            <span class="pred-name">${t(team)}</span>
+            ${correct ? `<span class="pred-check">✅</span>` : wrong ? `<span class="pred-check">✗</span>` : ""}
+          </div>`;
+        }
+        html += `</div>`;
+      }
+
       grid.innerHTML = html;
     }
   }

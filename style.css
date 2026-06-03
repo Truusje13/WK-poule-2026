@@ -842,6 +842,11 @@ main {
   font-size: 0.82rem;
 }
 
+/* Nummers-3 kaart in doorkomst-overzicht */
+.thirds-card {
+  grid-column: span 2;
+}
+
 /* Voorspelde teamnamen in knockoutronden */
 .predicted-name {
   color: var(--orange-dark);
