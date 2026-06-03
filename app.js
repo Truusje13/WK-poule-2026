@@ -1319,10 +1319,10 @@ function resolveBracketSlot(slot, predictedStandings, teamStats, thirdPreds, thi
   if (slot.type === "winner")    return { team: predictedStandings[slot.group]?.[0] ?? null, preliminary: false };
   if (slot.type === "runner-up") return { team: predictedStandings[slot.group]?.[1] ?? null, preliminary: false };
   if (slot.type === "third") {
-    // Zoek de gebruikersvoorspelling voor de 3e-plaatsers uit de opgegeven groepen
-    // die ook in hun doorkomstlijstje staan
+    // Gebruik de automatisch berekende 3e-plaatser per groep (uit voorspelde standen),
+    // gefilterd op de 8 landen die de gebruiker heeft aangegeven dat ze doorgaan
     const candidates = slot.groups
-      .map(g => thirdPreds?.[`GROUP_${g}`])
+      .map(g => predictedStandings[`GROUP_${g}`]?.[2])
       .filter(team => team && thirdAdvPreds?.includes(team));
     return { team: candidates[0] ?? null, preliminary: true };
   }
