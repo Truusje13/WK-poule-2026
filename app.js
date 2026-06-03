@@ -1602,7 +1602,25 @@ window.updateThirdAdvCount = function() {
 window.togglePenaltyWinner = function(checkbox) {
   const matchId   = checkbox.dataset.match;
   const winnerDiv = document.getElementById(`pen-winner-${matchId}`);
-  if (winnerDiv) winnerDiv.classList.toggle("hidden", !checkbox.checked);
+  if (!winnerDiv) return;
+
+  winnerDiv.classList.toggle("hidden", !checkbox.checked);
+
+  if (checkbox.checked) {
+    // Lees de actuele teamnamen uit de match-rij en zet die op de knoppen
+    const row     = checkbox.closest(".match-row");
+    const homeEl  = row?.querySelector(".team.home");
+    const awayEl  = row?.querySelector(".team.away");
+    const homeBtn = winnerDiv.querySelector(`.pen-btn[data-side="home"]`);
+    const awayBtn = winnerDiv.querySelector(`.pen-btn[data-side="away"]`);
+
+    const homeName = homeEl?.textContent?.trim();
+    const awayName = awayEl?.textContent?.trim();
+
+    if (homeBtn && homeName && homeName !== "?") homeBtn.textContent = homeName;
+    if (awayBtn && awayName && awayName !== "?") awayBtn.textContent = awayName;
+  }
+
   // Auto-save en bracket bijwerken
   triggerPenaltySave();
 };
