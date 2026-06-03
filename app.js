@@ -566,7 +566,7 @@ async function renderPredictions() {
 
       // Doorkomst top-2 overzicht — direct na groepsfase
       html += `
-        <div class="stage-header">Jouw voorspelde doorkomst naar de Last 32</div>
+        <div class="stage-header">Jouw voorspelde doorkomst naar de laatste 32</div>
         <div class="predicted-advancement-intro">
           Op basis van jouw ingevulde groepsscores komen deze landen door.
           Wordt automatisch bijgewerkt terwijl je scores invult.
