@@ -1442,6 +1442,10 @@ window.updateThirdAdvCount = function() {
   });
   // Update de bracket in de Last 32
   updateKnockoutTeamLabels();
+  // Auto-opslaan na wijziging
+  showAutoSaveStatus("⏳ Wordt opgeslagen...");
+  clearTimeout(window._thirdAdvSaveTimer);
+  window._thirdAdvSaveTimer = setTimeout(() => autoSave(), 2000);
 };
 
 window.togglePenaltyWinner = function(checkbox) {
