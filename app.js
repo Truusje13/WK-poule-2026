@@ -483,7 +483,6 @@ async function renderPredictions() {
               <span class="team away">${awayLabel}</span>
             </div>
             <div class="match-meta">
-              ${isPreliminary ? `<span class="preliminary-badge">voorlopig</span>` : ""}
               ${metaHtml}
             </div>
             ${penaltyHtml}
