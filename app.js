@@ -160,15 +160,15 @@ async function joinPoule() {
 
     // Migreer oude data naar Firebase UID (als die onder een andere key stond)
     if (oldKey) {
-      const nodes = ["predictions", "thirdplace", "thirdadvance", "standings"];
+      const nodes = ["predictions", "thirdplace", "thirdadvance"];
       for (const node of nodes) {
         const oldSnap = await get(ref(db, `${node}/${oldKey}`));
         if (oldSnap.exists()) {
           await set(ref(db, `${node}/${user.uid}`), oldSnap.val());
         }
       }
-      // Oude participant verwijderen
-      await set(ref(db, `participants/${oldKey}`), null);
+      // Oude participant record overschrijven met nieuwe UID als naam
+      // (kunnen we niet verwijderen vanwege security rules — blijft onschadelijk staan)
     }
 
     // Sla deelnemer op onder eigen Firebase UID
@@ -273,7 +273,7 @@ async function fetchMatchesFromAPI() {
       group: m.group ?? m.stage ?? "UNKNOWN"
     };
   }
-  await set(ref(db, "matches"), matches);
+  // matches wordt alleen via GitHub Actions naar Firebase geschreven (niet via de browser)
 }
 
 // Uitslagen worden bijgewerkt via GitHub Actions (elke 30 min).
