@@ -145,20 +145,30 @@ async function joinPoule() {
       user = cred.user;
     }
 
-    // Controleer of naam al bestaat bij een andere gebruiker
+    // Kijk of naam al bestaat (ook onder oude push-keys)
     const snap = await get(ref(db, "participants"));
+    let oldKey = null;
     if (snap.exists()) {
       const participants = snap.val();
       const existing = Object.entries(participants).find(
-        ([uid, p]) => p.name.toLowerCase() === name.toLowerCase() && uid !== user.uid
+        ([, p]) => p.name.toLowerCase() === name.toLowerCase()
       );
-      if (existing) {
-        errorEl.textContent = "Deze naam is al in gebruik. Kies een andere naam.";
-        errorEl.classList.remove("hidden");
-        btn.disabled = false;
-        btn.textContent = "Meedoen →";
-        return;
+      if (existing && existing[0] !== user.uid) {
+        oldKey = existing[0]; // oude push-key of ander UID
       }
+    }
+
+    // Migreer oude data naar Firebase UID (als die onder een andere key stond)
+    if (oldKey) {
+      const nodes = ["predictions", "thirdplace", "thirdadvance", "standings"];
+      for (const node of nodes) {
+        const oldSnap = await get(ref(db, `${node}/${oldKey}`));
+        if (oldSnap.exists()) {
+          await set(ref(db, `${node}/${user.uid}`), oldSnap.val());
+        }
+      }
+      // Oude participant verwijderen
+      await set(ref(db, `participants/${oldKey}`), null);
     }
 
     // Sla deelnemer op onder eigen Firebase UID
