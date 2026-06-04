@@ -521,22 +521,13 @@ async function renderPredictions() {
       const actualThirdsAll  = calculateGroupStandings();
       const actualAdvAll     = getActualAdvancingThirds();
 
-      html += `<div class="stage-header">Nummers 3 &amp; doorkomst</div>
-      <div class="advancement-intro">
-        Op basis van jouw ingevulde groepsscores komen dit de nummers 3.
-        Kies welke <strong>8 van de 12</strong> doorgaan.
-        <strong>+${SCORING.third} punten</strong> per correct nummer 3 •
-        <strong>+${SCORING.thirdAdvance} punten</strong> als dat land ook echt doorkomt.
-      </div>`;
-
-      // Toon de 12 nummers 3 (automatisch berekend) als kaartjes
-      html += `<div id="third-grid" class="third-grid"></div>`;
-
       // Doorkomst-selectie (welke 8 gaan door)
       html += `<div class="third-advance-section">
-        <div class="third-advance-title">Welke 8 van de 12 nummers 3 gaan door?</div>
-        <div class="third-advance-intro">
-          Selecteer op basis van de nummers 3 hierboven. Maximaal 8 landen.
+        <div class="stage-header">Welke 8 van de 12 nummers 3 gaan door?</div>
+        <div class="advancement-intro">
+          Selecteer welke nummers 3 doorgaan naar de laatste 32. Maximaal 8 landen.
+          <strong>+${SCORING.third} punten</strong> per correct nummer 3 •
+          <strong>+${SCORING.thirdAdvance} punten</strong> als dat land ook echt doorkomt.
         </div>
         <div class="third-advance-grid" id="third-advance-grid">`;
 
