@@ -759,7 +759,7 @@ function updatePredictedAdvancement() {
       thirdHtml += `<div class="predicted-group">
         <div class="predicted-group-label">${label}</div>
         <div class="predicted-team">
-          <span class="pred-pos">3️⃣</span>
+          <span class="pred-pos">🥉</span>
           <span class="pred-name">${team ? `<em>${t(team)}</em>` : "<span style='color:#bbb'>– nog niet bepaald</span>"}</span>
         </div>
       </div>`;
@@ -815,7 +815,7 @@ function updatePredictedAdvancement() {
           const correct = actual.size > 0 && actual.has(third);
           const wrong   = actual.size > 0 && !actual.has(third);
           html += `<div class="predicted-team ${correct ? "correct" : wrong ? "wrong" : ""}">
-            <span class="pred-pos">3️⃣</span>
+            <span class="pred-pos">🥉</span>
             <span class="pred-name">${t(third)}</span>
             ${correct ? `<span class="pred-check">✅</span>` : wrong ? `<span class="pred-check">✗</span>` : ""}
           </div>`;
@@ -1059,7 +1059,7 @@ function renderStandings() {
           <th title="Juiste uitslag">✓ Uitslag</th>
           <th title="Doorkomst & positie">🌍 Door</th>
           <th title="Knockout rondebonus">🏆 Bonus</th>
-          <th title="Nummer 3 voorspellingen">3️⃣ Nr3</th>
+          <th title="Nummer 3 voorspellingen">🥉 Nr3</th>
         </tr>
       </thead>
       <tbody>`;
