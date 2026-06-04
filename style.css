@@ -900,6 +900,48 @@ main {
   padding: 0.5rem;
 }
 
+/* ── Wereldkampioen box ── */
+.world-champion-box {
+  margin: 2rem auto 1rem;
+  max-width: 420px;
+  background: linear-gradient(135deg, #fff8e1, #fff3cd);
+  border: 2px solid #f9a825;
+  border-radius: 16px;
+  padding: 1.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(249,168,37,0.2);
+}
+.wc-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #b8860b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+.wc-team {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #e65100;
+}
+.wc-team.wc-unknown {
+  font-size: 1rem;
+  font-weight: 400;
+  color: #aaa;
+}
+.wc-finalists {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #555;
+  display: block;
+}
+.wc-hint {
+  font-size: 0.8rem;
+  color: #aaa;
+  display: block;
+  margin-top: 0.25rem;
+}
+
 /* Nummers-3 kaart in doorkomst-overzicht */
 .thirds-card {
   grid-column: span 2;

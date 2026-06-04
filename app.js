@@ -604,6 +604,11 @@ async function renderPredictions() {
     }
   }
 
+  html += `<div class="world-champion-box" id="world-champion-box">
+    <div class="wc-label">🏆 Jouw voorspelde wereldkampioen</div>
+    <div class="wc-team" id="wc-team">–</div>
+  </div>`;
+
   if (!locked) {
     html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
   }
@@ -614,6 +619,7 @@ async function renderPredictions() {
   updateThirdAdvCount();
   updatePredictedAdvancement();
   updateGroupStandingsOverview();
+  updateWorldChampion();
 
   let autoSaveTimer = null;
   container.querySelectorAll("input[type=number]").forEach(input => {
@@ -621,6 +627,7 @@ async function renderPredictions() {
       updatePredictedAdvancement();
       updateGroupStandingsOverview();
       updateKnockoutTeamLabels();
+      updateWorldChampion();
       // Auto-opslaan: 2 seconden na de laatste invoer
       clearTimeout(autoSaveTimer);
       showAutoSaveStatus("⏳ Wordt opgeslagen...");
@@ -827,6 +834,41 @@ function calculateActualTeamStats() {
     else               { stats[home].d++; stats[home].pts += 1; stats[away].d++; stats[away].pts += 1; }
   }
   return stats;
+}
+
+function updateWorldChampion() {
+  const el = document.getElementById("wc-team");
+  if (!el) return;
+
+  const currentPreds       = readCurrentPreds();
+  const currentThirdAdv    = readCurrentThirdAdvData();
+  const { standings: pred, teamStats } = calculatePredictedGroupData(currentPreds);
+  const thirdAssignment    = computeThirdAssignment(currentThirdAdv, pred);
+  const cache              = {};
+
+  // Finale = match 537390, winnaar = wereldkampioen
+  const FINAL_ID = "537390";
+  const b = KNOCKOUT_BRACKET[FINAL_ID];
+  if (!b) return;
+
+  const champion = resolveRoundTeam(b.home.source, true, currentPreds, thirdAssignment, pred, teamStats, cache)
+                ?? resolveRoundTeam(b.away.source, true, currentPreds, thirdAssignment, pred, teamStats, cache);
+
+  // Probeer winnaar van de finale zelf te bepalen
+  const home = resolveRoundTeam(b.home.source, b.home.winner, currentPreds, thirdAssignment, pred, teamStats, cache);
+  const away = resolveRoundTeam(b.away.source, b.away.winner, currentPreds, thirdAssignment, pred, teamStats, cache);
+  const finalWinner = resolveRoundTeam(FINAL_ID, true, currentPreds, thirdAssignment, pred, teamStats, cache);
+
+  if (finalWinner) {
+    el.textContent = t(finalWinner);
+    el.classList.remove("wc-unknown");
+  } else if (home || away) {
+    el.innerHTML = `<span class="wc-finalists">${home ? t(home) : "?"} vs ${away ? t(away) : "?"}</span><span class="wc-hint"> — vul de finale in om de kampioen te zien</span>`;
+    el.classList.add("wc-unknown");
+  } else {
+    el.textContent = "–";
+    el.classList.add("wc-unknown");
+  }
 }
 
 function updateKnockoutTeamLabels() {
@@ -1739,6 +1781,7 @@ window.updateThirdAdvCount = function() {
   });
   // Update de bracket in de Last 32
   updateKnockoutTeamLabels();
+  updateWorldChampion();
   // Auto-opslaan na wijziging
   showAutoSaveStatus("⏳ Wordt opgeslagen...");
   clearTimeout(window._thirdAdvSaveTimer);
