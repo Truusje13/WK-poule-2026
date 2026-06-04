@@ -973,12 +973,6 @@ function updatePredictedAdvancement() {
 
     if (stageMatches.length === 0) { continue; }
 
-    // Check of teams al bekend zijn (niet null)
-    const teamsKnown = stageMatches.some(([, m]) => m.homeTeam && m.awayTeam);
-    if (!teamsKnown) {
-      container.innerHTML = `<span class="predicted-empty">Wordt ingevuld nadat de vorige ronde gespeeld is.</span>`;
-      continue;
-    }
 
     const winners = [];
     for (const [matchId, m] of stageMatches) {
