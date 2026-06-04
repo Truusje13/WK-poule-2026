@@ -739,9 +739,10 @@ function updateGroupStandingsOverview() {
         <thead><tr><th>#</th><th>Land</th><th>P</th><th>W</th><th>G</th><th>V</th><th>D</th><th>Pts</th></tr></thead>
         <tbody>`;
     predOrder.forEach((team, i) => {
-      const s = predStats[team] ?? {};
+      const s  = predStats[team] ?? {};
       const gd = (s.gf ?? 0) - (s.ga ?? 0);
-      html += `<tr class="${i < 2 ? "advances" : i === 2 ? "third-place" : ""}">
+      const bg = i < 2 ? "background:#e8f8ee" : i === 2 ? "background:#fff3e0" : "";
+      html += `<tr style="${bg}">
         <td>${i + 1}</td>
         <td class="team-name">${t(team)}</td>
         <td>${s.played ?? 0}</td>
@@ -765,9 +766,10 @@ function updateGroupStandingsOverview() {
           <thead><tr><th>#</th><th>Land</th><th>P</th><th>W</th><th>G</th><th>V</th><th>D</th><th>Pts</th></tr></thead>
           <tbody>`;
       actOrder.forEach((team, i) => {
-        const s = actualStats[team] ?? {};
+        const s  = actualStats[team] ?? {};
         const gd = (s.gf ?? 0) - (s.ga ?? 0);
-        html += `<tr class="${i < 2 ? "advances" : i === 2 ? "third-place" : ""}">
+        const bg = i < 2 ? "background:#e8f8ee" : i === 2 ? "background:#fff3e0" : "";
+        html += `<tr style="${bg}">
           <td>${i + 1}</td>
           <td class="team-name">${t(team)}</td>
           <td>${s.played ?? 0}</td>
