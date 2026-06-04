@@ -54,12 +54,16 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import {
   getDatabase, ref, set, get, update, push, onValue
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import {
+  getAuth, signInAnonymously, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // ============================================================
 // APP STATE
 // ============================================================
 
-let db = null;
+let db   = null;
+let auth = null;
 let currentUser = null;  // { id, name }
 let matches = {};        // matchId -> match object
 let unsubStandings = null;
@@ -75,22 +79,30 @@ async function init() {
   }
 
   const firebaseApp = initializeApp(FIREBASE_CONFIG);
-  db = getDatabase(firebaseApp);
+  db   = getDatabase(firebaseApp);
+  auth = getAuth(firebaseApp);
 
-  const saved = localStorage.getItem("poule_user");
-  if (saved) {
-    try {
-      currentUser = JSON.parse(saved);
+  // Firebase herstelt anonieme sessie automatisch uit localStorage.
+  // onAuthStateChanged vuurt zodra auth klaar is.
+  onAuthStateChanged(auth, async (user) => {
+    const savedName = localStorage.getItem("poule_name");
+
+    if (user && savedName) {
+      // Terugkerende gebruiker met actieve sessie
+      currentUser = { id: user.uid, name: savedName };
+      await set(ref(db, `participants/${user.uid}`), { name: savedName, joinedAt: Date.now() });
       setLoggedIn();
       await loadMatches();
       showView("standings");
-    } catch {
-      localStorage.removeItem("poule_user");
+    } else if (!savedName) {
+      // Nieuwe bezoeker
       showView("join");
     }
-  } else {
-    showView("join");
-  }
+    // Als user === null: auth nog bezig, wachten
+  });
+
+  // Anonieme sessie starten (of bestaande herstellen)
+  try { await signInAnonymously(auth); } catch (e) { console.warn("Auth fout:", e); showView("join"); }
 }
 
 function showConfigError() {
@@ -126,26 +138,33 @@ async function joinPoule() {
   btn.textContent = "Bezig...";
 
   try {
+    // Zorg voor een anonieme Firebase-sessie
+    let user = auth.currentUser;
+    if (!user) {
+      const cred = await signInAnonymously(auth);
+      user = cred.user;
+    }
+
+    // Controleer of naam al bestaat bij een andere gebruiker
     const snap = await get(ref(db, "participants"));
     if (snap.exists()) {
       const participants = snap.val();
       const existing = Object.entries(participants).find(
-        ([, p]) => p.name.toLowerCase() === name.toLowerCase()
+        ([uid, p]) => p.name.toLowerCase() === name.toLowerCase() && uid !== user.uid
       );
       if (existing) {
-        currentUser = { id: existing[0], name: existing[1].name };
-        localStorage.setItem("poule_user", JSON.stringify(currentUser));
-        setLoggedIn();
-        await loadMatches();
-        showView("predictions");
+        errorEl.textContent = "Deze naam is al in gebruik. Kies een andere naam.";
+        errorEl.classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "Meedoen →";
         return;
       }
     }
 
-    const newRef = push(ref(db, "participants"));
-    await set(newRef, { name, joinedAt: Date.now() });
-    currentUser = { id: newRef.key, name };
-    localStorage.setItem("poule_user", JSON.stringify(currentUser));
+    // Sla deelnemer op onder eigen Firebase UID
+    await set(ref(db, `participants/${user.uid}`), { name, joinedAt: Date.now() });
+    currentUser = { id: user.uid, name };
+    localStorage.setItem("poule_name", name);
     setLoggedIn();
     await loadMatches();
     showView("predictions");
@@ -164,7 +183,7 @@ async function joinPoule() {
 }
 
 function logout() {
-  localStorage.removeItem("poule_user");
+  localStorage.removeItem("poule_name");
   currentUser = null;
   if (unsubStandings) { unsubStandings(); unsubStandings = null; }
   document.getElementById("main-nav").classList.add("hidden");

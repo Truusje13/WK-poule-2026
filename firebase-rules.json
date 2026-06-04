@@ -1,0 +1,36 @@
+{
+  "rules": {
+    "matches": {
+      ".read": true,
+      ".write": false
+    },
+    "participants": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "predictions": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "thirdplace": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "thirdadvance": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "standings": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}
