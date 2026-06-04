@@ -506,8 +506,17 @@ async function renderPredictions() {
       }
     }
 
-    // Na groep L (einde groepsfase): nummer-3 overzicht en doorkomst
+    // Na groep L (einde groepsfase): groepsstanden + nummer-3 overzicht
     if (stage === "GROUP_STAGE") {
+      html += `<div class="stage-header">Groepsstanden</div>
+      <div class="advancement-intro">
+        Jouw voorspelde eindstand per groep op basis van de ingevulde scores.
+        ${Object.values(matches).some(m => m.stage === "GROUP_STAGE" && m.homeScore !== null)
+          ? "Zodra wedstrijden gespeeld zijn verschijnt de werkelijke stand ernaast."
+          : ""}
+      </div>
+      <div id="group-standings-overview"></div>`;
+
       const sortedGroupsAll  = Object.keys(getTeamsPerGroup()).sort();
       const actualThirdsAll  = calculateGroupStandings();
       const actualAdvAll     = getActualAdvancingThirds();
@@ -584,11 +593,13 @@ async function renderPredictions() {
   // Initialiseer tellers en overzichten
   updateThirdAdvCount();
   updatePredictedAdvancement();
+  updateGroupStandingsOverview();
 
   let autoSaveTimer = null;
   container.querySelectorAll("input[type=number]").forEach(input => {
     input.addEventListener("input", () => {
       updatePredictedAdvancement();
+      updateGroupStandingsOverview();
       updateKnockoutTeamLabels();
       // Auto-opslaan: 2 seconden na de laatste invoer
       clearTimeout(autoSaveTimer);
@@ -695,6 +706,105 @@ function readCurrentThirdAdvData() {
     if (cb.dataset.team) selected.push(cb.dataset.team);
   });
   return selected;
+}
+
+function updateGroupStandingsOverview() {
+  const container = document.getElementById("group-standings-overview");
+  if (!container) return;
+
+  const currentPreds = readCurrentPreds();
+  const { standings: predStandings, teamStats: predStats } = calculatePredictedGroupData(currentPreds);
+  const actualStandings = calculateGroupStandings();          // werkelijke stand (leeg als niet gespeeld)
+  const actualStats     = calculateActualTeamStats();         // werkelijke teamstats
+
+  const groups = Object.keys(getTeamsPerGroup()).sort();
+  if (groups.length === 0) { container.innerHTML = ""; return; }
+
+  const hasActual = Object.keys(actualStandings).length > 0;
+
+  let html = "";
+  for (const group of groups) {
+    const label     = group.replace("GROUP_", "Groep ");
+    const predOrder = predStandings[group] ?? [];
+    const actOrder  = actualStandings[group] ?? [];
+
+    html += `<div class="group-standing-block">
+      <div class="group-standing-title">${label}</div>
+      <div class="group-standing-tables">`;
+
+    // ── Voorspelde stand ──
+    html += `<div class="standing-table-wrap">
+      <div class="standing-table-label">📋 Voorspeld</div>
+      <table class="standing-table">
+        <thead><tr><th>#</th><th>Land</th><th>P</th><th>W</th><th>G</th><th>V</th><th>D</th><th>Pts</th></tr></thead>
+        <tbody>`;
+    predOrder.forEach((team, i) => {
+      const s = predStats[team] ?? {};
+      const gd = (s.gf ?? 0) - (s.ga ?? 0);
+      html += `<tr class="${i < 2 ? "advances" : i === 2 ? "third-place" : ""}">
+        <td>${i + 1}</td>
+        <td class="team-name">${t(team)}</td>
+        <td>${s.played ?? 0}</td>
+        <td>${s.w ?? 0}</td>
+        <td>${s.d ?? 0}</td>
+        <td>${s.l ?? 0}</td>
+        <td>${gd >= 0 ? "+" : ""}${gd}</td>
+        <td><strong>${s.pts ?? 0}</strong></td>
+      </tr>`;
+    });
+    if (predOrder.length === 0) {
+      html += `<tr><td colspan="8" class="standing-empty">Vul scores in…</td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+
+    // ── Werkelijke stand (alleen als er gespeelde wedstrijden zijn) ──
+    if (hasActual && actOrder.length > 0) {
+      html += `<div class="standing-table-wrap">
+        <div class="standing-table-label">⚽ Werkelijk</div>
+        <table class="standing-table">
+          <thead><tr><th>#</th><th>Land</th><th>P</th><th>W</th><th>G</th><th>V</th><th>D</th><th>Pts</th></tr></thead>
+          <tbody>`;
+      actOrder.forEach((team, i) => {
+        const s = actualStats[team] ?? {};
+        const gd = (s.gf ?? 0) - (s.ga ?? 0);
+        html += `<tr class="${i < 2 ? "advances" : i === 2 ? "third-place" : ""}">
+          <td>${i + 1}</td>
+          <td class="team-name">${t(team)}</td>
+          <td>${s.played ?? 0}</td>
+          <td>${s.w ?? 0}</td>
+          <td>${s.d ?? 0}</td>
+          <td>${s.l ?? 0}</td>
+          <td>${gd >= 0 ? "+" : ""}${gd}</td>
+          <td><strong>${s.pts ?? 0}</strong></td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// Berekent werkelijke teamstats op basis van API-uitslagen
+function calculateActualTeamStats() {
+  const stats = {};
+  for (const m of Object.values(matches)) {
+    if (m.stage !== "GROUP_STAGE" || m.homeScore === null || m.awayScore === null) continue;
+    const home = m.homeTeam, away = m.awayTeam;
+    if (!home || !away) continue;
+    if (!stats[home]) stats[home] = { played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+    if (!stats[away]) stats[away] = { played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+    const hs = m.homeScore, as_ = m.awayScore;
+    stats[home].played++; stats[away].played++;
+    stats[home].gf += hs; stats[home].ga += as_;
+    stats[away].gf += as_; stats[away].ga += hs;
+    if (hs > as_)      { stats[home].w++; stats[home].pts += 3; stats[away].l++; }
+    else if (hs < as_) { stats[away].w++; stats[away].pts += 3; stats[home].l++; }
+    else               { stats[home].d++; stats[home].pts += 1; stats[away].d++; stats[away].pts += 1; }
+  }
+  return stats;
 }
 
 function updateKnockoutTeamLabels() {

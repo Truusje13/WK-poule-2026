@@ -842,6 +842,64 @@ main {
   font-size: 0.82rem;
 }
 
+/* ── Groepsstanden overzicht ── */
+.group-standing-block {
+  margin-bottom: 1.5rem;
+}
+.group-standing-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--orange-dark);
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+.group-standing-tables {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.standing-table-wrap {
+  flex: 1;
+  min-width: 260px;
+}
+.standing-table-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #888;
+  margin-bottom: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.standing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.standing-table th {
+  background: var(--orange-pale);
+  color: var(--orange-dark);
+  font-weight: 600;
+  padding: 0.3rem 0.4rem;
+  text-align: center;
+  border-bottom: 2px solid var(--orange-light);
+}
+.standing-table th:nth-child(2) { text-align: left; }
+.standing-table td {
+  padding: 0.28rem 0.4rem;
+  text-align: center;
+  border-bottom: 1px solid #f0f0f0;
+}
+.standing-table td.team-name { text-align: left; }
+.standing-table tr.advances td { background: #f0fff4; }
+.standing-table tr.third-place td { background: #fff8f0; }
+.standing-table tr:hover td { background: #fef3e8; }
+.standing-empty {
+  color: #bbb;
+  font-style: italic;
+  text-align: center;
+  padding: 0.5rem;
+}
+
 /* Nummers-3 kaart in doorkomst-overzicht */
 .thirds-card {
   grid-column: span 2;
