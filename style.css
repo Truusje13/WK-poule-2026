@@ -93,12 +93,24 @@ main {
 /* ===== JOIN CARD ===== */
 .join-card {
   max-width: 440px;
-  margin: 3rem auto;
+  margin: 1.5rem auto;
   text-align: center;
   background: white;
   border-radius: 12px;
-  padding: 2.5rem 2rem;
+  padding: 2rem 1.5rem;
   box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+}
+
+@media (max-width: 480px) {
+  .join-card {
+    margin: 0.75rem auto;
+    padding: 1.5rem 1.25rem;
+    border-radius: 8px;
+  }
+  .trophy { font-size: 2.2rem; }
+  .join-card h2 { font-size: 1.4rem; }
+  .input-group { flex-direction: column; }
+  .input-group .btn-primary { width: 100%; }
 }
 
 .trophy { font-size: 3rem; margin-bottom: 0.75rem; }
