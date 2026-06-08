@@ -1832,8 +1832,16 @@ async function renderAdminPanel() {
 }
 
 window.toggleHidden = async function(id, hide) {
-  await set(ref(db, `participants/${id}/hidden`), hide || null);
-  renderAdminPanel();
+  try {
+    if (hide) {
+      await set(ref(db, `participants/${id}/hidden`), true);
+    } else {
+      await set(ref(db, `participants/${id}/hidden`), null);
+    }
+    await renderAdminPanel();
+  } catch(e) {
+    alert("Opslaan mislukt: " + e.message);
+  }
 };
 
 window.saveBracketOverride = async function() {
