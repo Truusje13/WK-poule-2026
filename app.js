@@ -1217,25 +1217,19 @@ function renderStandings() {
       return;
     }
 
-    const rows = Object.entries(snap.val())
-      .filter(([uid]) => {
-        // Verberg deelnemers die door de beheerder zijn verborgen
-        const partSnap = snap.ref.parent.child ? null : null; // haal uit apart
-        return true; // filtering gebeurt via hiddenIds hieronder
-      })
-      .map(([, v]) => v)
-      .sort((a, b) => b.points - a.points || b.exactCount - a.exactCount || b.outcomeCount - a.outcomeCount);
+    // Haal participants op om te filteren op geldige UIDs en verborgen namen
+    const partSnap2 = await get(ref(db, "participants"));
+    const participants = partSnap2.exists() ? partSnap2.val() : {};
+    const validUids    = new Set(Object.keys(participants));
+    const hiddenNames  = new Set(
+      Object.values(participants).filter(p => p.hidden).map(p => p.name)
+    );
 
-    // Haal verborgen deelnemers op via participants
-    const hiddenNames = new Set();
-    const partRef = ref(db, "participants");
-    const partSnap2 = await get(partRef);
-    if (partSnap2.exists()) {
-      Object.values(partSnap2.val()).forEach(p => {
-        if (p.hidden) hiddenNames.add(p.name);
-      });
-    }
-    const visibleRows = rows.filter(r => !hiddenNames.has(r.name));
+    const visibleRows = Object.entries(snap.val())
+      .filter(([uid]) => validUids.has(uid))          // alleen bestaande deelnemers
+      .map(([, v]) => v)
+      .filter(r => !hiddenNames.has(r.name))          // verberg verborgen deelnemers
+      .sort((a, b) => b.points - a.points || b.exactCount - a.exactCount || b.outcomeCount - a.outcomeCount);
 
     const updatedAt = Math.max(...Object.values(snap.val()).map(r => r.updatedAt || 0));
     const lastUpdate = updatedAt ? `Bijgewerkt: ${formatDate(new Date(updatedAt).toISOString())}` : "";
