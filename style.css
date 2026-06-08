@@ -1043,10 +1043,12 @@ main {
 .admin-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.8rem 1rem;
   border-bottom: 1px solid #f0f0f0;
 }
+.admin-row .admin-name { flex: 1; }
+.admin-row .btn-delete { margin-left: auto; }
 
 .admin-row:last-child { border-bottom: none; }
 
