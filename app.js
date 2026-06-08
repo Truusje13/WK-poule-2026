@@ -74,6 +74,20 @@ let unsubStandings = null;
 // INIT
 // ============================================================
 
+// Geef een stabiele UUID terug per naam, opgeslagen in localStorage.
+// Zo kunnen meerdere gebruikers dezelfde browser/telefoon delen.
+function getLocalUID(name) {
+  const key = `poule_uid_${name.trim().toLowerCase()}`;
+  let uid = localStorage.getItem(key);
+  if (!uid) {
+    uid = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem(key, uid);
+  }
+  return uid;
+}
+
 async function init() {
   if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) {
     showConfigError();
@@ -84,27 +98,21 @@ async function init() {
   db   = getDatabase(firebaseApp);
   auth = getAuth(firebaseApp);
 
-  // Firebase herstelt anonieme sessie automatisch uit localStorage.
-  // onAuthStateChanged vuurt zodra auth klaar is.
-  onAuthStateChanged(auth, async (user) => {
-    const savedName = localStorage.getItem("poule_name");
+  // Anonieme auth voor schrijfrechten (auth != null in Firebase-regels)
+  try { await signInAnonymously(auth); } catch (e) { console.warn("Auth fout:", e); }
 
-    if (user && savedName) {
-      // Terugkerende gebruiker met actieve sessie
-      currentUser = { id: user.uid, name: savedName };
-      await update(ref(db, `participants/${user.uid}`), { name: savedName, joinedAt: Date.now() });
-      setLoggedIn();
-      await loadMatches();
-      showView("standings");
-    } else if (!savedName) {
-      // Nieuwe bezoeker
-      showView("join");
-    }
-    // Als user === null: auth nog bezig, wachten
-  });
-
-  // Anonieme sessie starten (of bestaande herstellen)
-  try { await signInAnonymously(auth); } catch (e) { console.warn("Auth fout:", e); showView("join"); }
+  // Terugkerende gebruiker herkennen via opgeslagen naam
+  const savedName = localStorage.getItem("poule_name");
+  if (savedName) {
+    const localUID = getLocalUID(savedName);
+    currentUser = { id: localUID, name: savedName };
+    await update(ref(db, `participants/${localUID}`), { name: savedName });
+    setLoggedIn();
+    await loadMatches();
+    showView("standings");
+  } else {
+    showView("join");
+  }
 }
 
 function showConfigError() {
@@ -140,45 +148,36 @@ async function joinPoule() {
   btn.textContent = "Bezig...";
 
   try {
-    // Zorg voor een anonieme Firebase-sessie
-    let user = auth.currentUser;
-    if (!user) {
-      const cred = await signInAnonymously(auth);
-      user = cred.user;
-    }
+    // Eigen stabiele UUID per naam — onafhankelijk van Firebase UID
+    const localUID = getLocalUID(name);
 
-    // Kijk of naam al bestaat (ook onder oude push-keys)
+    // Kijk of naam al bestaat onder een andere key (migratie van oud systeem)
     const snap = await get(ref(db, "participants"));
-    let oldKey = null;
     if (snap.exists()) {
       const participants = snap.val();
       const existing = Object.entries(participants).find(
-        ([, p]) => p.name.toLowerCase() === name.toLowerCase()
+        ([key, p]) => p.name.toLowerCase() === name.toLowerCase() && key !== localUID
       );
-      if (existing && existing[0] !== user.uid) {
-        oldKey = existing[0]; // oude push-key of ander UID
-      }
-    }
-
-    // Migreer oude data naar Firebase UID (als die onder een andere key stond)
-    if (oldKey) {
-      const nodes = ["predictions", "thirdplace", "thirdadvance"];
-      for (const node of nodes) {
-        const oldSnap = await get(ref(db, `${node}/${oldKey}`));
-        if (oldSnap.exists()) {
-          await set(ref(db, `${node}/${user.uid}`), oldSnap.val());
+      if (existing) {
+        const oldKey = existing[0];
+        // Migreer data van oude key naar nieuwe localUID
+        const nodes = ["predictions", "thirdplace", "thirdadvance"];
+        for (const node of nodes) {
+          const oldSnap = await get(ref(db, `${node}/${oldKey}`));
+          if (oldSnap.exists()) {
+            await set(ref(db, `${node}/${localUID}`), oldSnap.val());
+          }
         }
+        await Promise.all([
+          set(ref(db, `participants/${oldKey}`), null),
+          set(ref(db, `standings/${oldKey}`), null),
+        ]);
       }
-      // Verwijder alle oude entries zodat er geen dubbelen ontstaan
-      await Promise.all([
-        set(ref(db, `participants/${oldKey}`), null),
-        set(ref(db, `standings/${oldKey}`), null),
-      ]);
     }
 
-    // Sla deelnemer op onder eigen Firebase UID (update zodat hidden-vlag bewaard blijft)
-    await update(ref(db, `participants/${user.uid}`), { name, joinedAt: Date.now() });
-    currentUser = { id: user.uid, name };
+    // Sla deelnemer op (update zodat hidden-vlag bewaard blijft)
+    await update(ref(db, `participants/${localUID}`), { name, joinedAt: Date.now() });
+    currentUser = { id: localUID, name };
     localStorage.setItem("poule_name", name);
     setLoggedIn();
     await loadMatches();
