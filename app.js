@@ -1211,13 +1211,31 @@ function renderStandings() {
   if (unsubStandings) { unsubStandings(); }
 
   unsubStandings = onValue(ref(db, "standings"), (snap) => {
+    (async () => {
     if (!snap.exists()) {
       container.innerHTML = `<p class="loading">Nog geen standen — vul eerst je voorspellingen in.</p>`;
       return;
     }
 
-    const rows = Object.values(snap.val())
+    const rows = Object.entries(snap.val())
+      .filter(([uid]) => {
+        // Verberg deelnemers die door de beheerder zijn verborgen
+        const partSnap = snap.ref.parent.child ? null : null; // haal uit apart
+        return true; // filtering gebeurt via hiddenIds hieronder
+      })
+      .map(([, v]) => v)
       .sort((a, b) => b.points - a.points || b.exactCount - a.exactCount || b.outcomeCount - a.outcomeCount);
+
+    // Haal verborgen deelnemers op via participants
+    const hiddenNames = new Set();
+    const partRef = ref(db, "participants");
+    const partSnap2 = await get(partRef);
+    if (partSnap2.exists()) {
+      Object.values(partSnap2.val()).forEach(p => {
+        if (p.hidden) hiddenNames.add(p.name);
+      });
+    }
+    const visibleRows = rows.filter(r => !hiddenNames.has(r.name));
 
     const updatedAt = Math.max(...Object.values(snap.val()).map(r => r.updatedAt || 0));
     const lastUpdate = updatedAt ? `Bijgewerkt: ${formatDate(new Date(updatedAt).toISOString())}` : "";
@@ -1238,7 +1256,7 @@ function renderStandings() {
       </thead>
       <tbody>`;
 
-    rows.forEach((s, i) => {
+    visibleRows.forEach((s, i) => {
       const isMe = s.name === currentUser?.name;
       const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`;
       html += `<tr class="${isMe ? "me" : ""}">
@@ -1255,6 +1273,7 @@ function renderStandings() {
 
     html += "</tbody></table>";
     container.innerHTML = html;
+    })();
   });
 }
 
@@ -1734,9 +1753,15 @@ async function renderAdminPanel() {
   // ── Deelnemers ──
   let html = `<h3 style="margin:1rem 0 0.5rem">Deelnemers</h3><div class="admin-list">`;
   for (const [id, p] of Object.entries(participants).sort(([,a],[,b]) => a.name.localeCompare(b.name))) {
+    const hidden = p.hidden === true;
     html += `
       <div class="admin-row" id="admin-row-${id}">
-        <span class="admin-name">${p.name}</span>
+        <span class="admin-name ${hidden ? "admin-name-hidden" : ""}">${p.name}${hidden ? " <em>(verborgen)</em>" : ""}</span>
+        <label class="admin-toggle" title="Verberg in klassement">
+          <input type="checkbox" ${hidden ? "checked" : ""}
+            onchange="toggleHidden('${id}', this.checked)" />
+          Verberg
+        </label>
         <button class="btn-delete" onclick="deleteParticipant('${id}', '${p.name}')">🗑 Verwijderen</button>
       </div>`;
   }
@@ -1805,6 +1830,11 @@ async function renderAdminPanel() {
 
   container.innerHTML = html;
 }
+
+window.toggleHidden = async function(id, hide) {
+  await set(ref(db, `participants/${id}/hidden`), hide || null);
+  renderAdminPanel();
+};
 
 window.saveBracketOverride = async function() {
   const status = document.getElementById("override-save-status");

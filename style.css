@@ -954,6 +954,25 @@ main {
   margin-top: 0.25rem;
 }
 
+/* ── Admin deelnemers ── */
+.admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: #888;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.admin-name-hidden {
+  color: #bbb;
+  text-decoration: line-through;
+}
+.admin-name-hidden em {
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
 /* ── Admin bracket override ── */
 .bracket-override-grid {
   display: flex;
