@@ -6,27 +6,19 @@
     },
     "participants": {
       ".read": true,
-      "$uid": {
-        ".write": "auth != null && auth.uid === $uid"
-      }
+      ".write": "auth != null"
     },
     "predictions": {
       ".read": true,
-      "$uid": {
-        ".write": "auth != null && auth.uid === $uid"
-      }
+      ".write": "auth != null"
     },
     "thirdplace": {
       ".read": true,
-      "$uid": {
-        ".write": "auth != null && auth.uid === $uid"
-      }
+      ".write": "auth != null"
     },
     "thirdadvance": {
       ".read": true,
-      "$uid": {
-        ".write": "auth != null && auth.uid === $uid"
-      }
+      ".write": "auth != null"
     },
     "standings": {
       ".read": true,
