@@ -92,7 +92,7 @@ async function init() {
     if (user && savedName) {
       // Terugkerende gebruiker met actieve sessie
       currentUser = { id: user.uid, name: savedName };
-      await set(ref(db, `participants/${user.uid}`), { name: savedName, joinedAt: Date.now() });
+      await update(ref(db, `participants/${user.uid}`), { name: savedName, joinedAt: Date.now() });
       setLoggedIn();
       await loadMatches();
       showView("standings");
@@ -176,8 +176,8 @@ async function joinPoule() {
       ]);
     }
 
-    // Sla deelnemer op onder eigen Firebase UID
-    await set(ref(db, `participants/${user.uid}`), { name, joinedAt: Date.now() });
+    // Sla deelnemer op onder eigen Firebase UID (update zodat hidden-vlag bewaard blijft)
+    await update(ref(db, `participants/${user.uid}`), { name, joinedAt: Date.now() });
     currentUser = { id: user.uid, name };
     localStorage.setItem("poule_name", name);
     setLoggedIn();
