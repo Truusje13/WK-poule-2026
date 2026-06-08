@@ -52,7 +52,7 @@ header {
   height: 56px;
 }
 
-h1 { font-size: 1.25rem; }
+h1 { font-size: 1.25rem; white-space: nowrap; }
 
 nav {
   display: flex;
@@ -70,6 +70,27 @@ nav button {
   cursor: pointer;
   font-size: 0.875rem;
   transition: background 0.15s;
+}
+
+@media (max-width: 600px) {
+  .header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    height: auto;
+    padding: 0.6rem 0;
+    gap: 0.4rem;
+  }
+  nav {
+    gap: 0.3rem;
+    width: 100%;
+  }
+  nav button {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.55rem;
+  }
+  #user-name {
+    display: none; /* naam zit al in de knoppen */
+  }
 }
 
 nav button:hover { background: rgba(255,255,255,0.28); }
