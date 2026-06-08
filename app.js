@@ -169,8 +169,11 @@ async function joinPoule() {
           await set(ref(db, `${node}/${user.uid}`), oldSnap.val());
         }
       }
-      // Verwijder het oude account zodat er geen dubbelen in de database staan
-      await set(ref(db, `participants/${oldKey}`), null);
+      // Verwijder alle oude entries zodat er geen dubbelen ontstaan
+      await Promise.all([
+        set(ref(db, `participants/${oldKey}`), null),
+        set(ref(db, `standings/${oldKey}`), null),
+      ]);
     }
 
     // Sla deelnemer op onder eigen Firebase UID
