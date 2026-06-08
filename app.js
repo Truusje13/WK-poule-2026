@@ -169,8 +169,8 @@ async function joinPoule() {
           await set(ref(db, `${node}/${user.uid}`), oldSnap.val());
         }
       }
-      // Oude participant record overschrijven met nieuwe UID als naam
-      // (kunnen we niet verwijderen vanwege security rules — blijft onschadelijk staan)
+      // Verwijder het oude account zodat er geen dubbelen in de database staan
+      await set(ref(db, `participants/${oldKey}`), null);
     }
 
     // Sla deelnemer op onder eigen Firebase UID
