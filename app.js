@@ -42,7 +42,8 @@ const SCORING = {
     CHAMPION:       50
   }
 };
-const DEADLINE = new Date("2026-06-11T17:00:00Z"); // Eerste wedstrijd WK 2026
+const DEADLINE           = new Date("2026-06-11T17:00:00Z"); // Eerste wedstrijd WK 2026
+const THIRD_ADV_DEADLINE = new Date("2026-07-03T12:00:00Z"); // Na groepsfase, vóór eerste Last 32 met nummer-3
 const CACHE_KEY = "poule_matches_v1";
 const RESULTS_CACHE_MINUTES = 30;
 
@@ -320,7 +321,8 @@ function calcPoints(match, pred) {
 
 async function renderPredictions() {
   const container = document.getElementById("predictions-container");
-  const locked = new Date() > DEADLINE;
+  const locked         = new Date() > DEADLINE;
+  const thirdAdvLocked = new Date() > THIRD_ADV_DEADLINE;
 
   if (Object.keys(matches).length === 0) {
     container.innerHTML = "<p class='loading'>⏳ Wedstrijden laden...</p>";
@@ -557,6 +559,7 @@ async function renderPredictions() {
           Selecteer welke nummers 3 doorgaan naar de laatste 32. Maximaal 8 landen.
           <strong>+${SCORING.third} punten</strong> per correct nummer 3 •
           <strong>+${SCORING.thirdAdvance} punten</strong> als dat land ook echt doorkomt.
+          ${locked && !thirdAdvLocked ? `<br><span style="color:var(--orange-dark);font-weight:600">⏰ Je kunt deze selectie nog aanpassen tot 3 juli 2026 om 14:00 uur.</span>` : ""}
         </div>
         <div class="third-advance-grid" id="third-advance-grid">`;
 
@@ -577,7 +580,7 @@ async function renderPredictions() {
           else if (isSelected)         badge = `<span class="adv-badge adv-wrong" style="font-size:0.7rem">✗</span>`;
         }
 
-        html += locked
+        html += thirdAdvLocked
           ? `<div class="third-adv-team ${isSelected ? "selected" : ""}">
               <span>${groupLabel}: <em>${t(predicted3rd)}</em></span>${badge}
              </div>`
@@ -609,7 +612,7 @@ async function renderPredictions() {
     <div class="wc-team" id="wc-team">–</div>
   </div>`;
 
-  if (!locked) {
+  if (!locked || !thirdAdvLocked) {
     html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
   }
 
