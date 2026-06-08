@@ -933,6 +933,27 @@ main {
   padding: 0.5rem;
 }
 
+/* ── Quicklinks bovenaan voorspellingen ── */
+.quicklinks {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 1rem 0.25rem;
+}
+.quicklink {
+  display: inline-block;
+  background: var(--orange-pale);
+  border: 1px solid var(--orange-light);
+  color: var(--orange-dark);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.35rem 0.8rem;
+  border-radius: 20px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.quicklink:hover { background: var(--orange-light); color: white; }
+
 /* ── Wereldkampioen box ── */
 .world-champion-box {
   margin: 2rem auto 1rem;

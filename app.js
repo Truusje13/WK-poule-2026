@@ -550,7 +550,7 @@ async function renderPredictions() {
       const actualAdvAll     = getActualAdvancingThirds();
 
       // Doorkomst-selectie (welke 8 gaan door)
-      html += `<div class="third-advance-section">
+      html += `<div class="third-advance-section" id="nummer3-sectie">
         <div class="stage-header">Welke 8 van de 12 nummers 3 gaan door?</div>
         <div class="advancement-intro">
           Selecteer welke nummers 3 doorgaan naar de laatste 32. Maximaal 8 landen.
