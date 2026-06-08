@@ -942,6 +942,41 @@ main {
   margin-top: 0.25rem;
 }
 
+/* ── Admin bracket override ── */
+.bracket-override-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.override-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  flex-wrap: wrap;
+}
+.override-info {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.85rem;
+}
+.override-info strong { color: #333; }
+.override-info span   { color: #888; }
+.override-groups      { font-size: 0.75rem; color: #aaa; }
+.override-select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  min-width: 180px;
+}
+
 /* Nummers-3 kaart in doorkomst-overzicht */
 .thirds-card {
   grid-column: span 2;

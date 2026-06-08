@@ -31,6 +31,10 @@
     "standings": {
       ".read": true,
       ".write": "auth != null"
+    },
+    "bracketOverride": {
+      ".read": true,
+      ".write": "auth != null"
     }
   }
 }

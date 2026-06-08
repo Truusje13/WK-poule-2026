@@ -65,8 +65,9 @@ import {
 
 let db   = null;
 let auth = null;
-let currentUser = null;  // { id, name }
-let matches = {};        // matchId -> match object
+let currentUser    = null;  // { id, name }
+let matches        = {};    // matchId -> match object
+let bracketOverride = {};   // admin-override voor nummer-3 toewijzing
 let unsubStandings = null;
 
 // ============================================================
@@ -230,10 +231,12 @@ function showView(name) {
 async function loadMatches() {
   // Wedstrijden en uitslagen worden bijgehouden via GitHub Actions → Firebase.
   // De browser leest alleen uit Firebase, zodat CORS geen probleem is.
-  const matchesSnap = await get(ref(db, "matches"));
-  if (matchesSnap.exists()) {
-    matches = matchesSnap.val();
-  }
+  const [matchesSnap, overrideSnap] = await Promise.all([
+    get(ref(db, "matches")),
+    get(ref(db, "bracketOverride"))
+  ]);
+  if (matchesSnap.exists()) matches = matchesSnap.val();
+  bracketOverride = overrideSnap.exists() ? overrideSnap.val() : {};
   // Punten herberekenen als er nieuwe uitslagen zijn
   if (Object.keys(matches).length > 0) {
     recalculateAllStandings().catch(console.error);
@@ -1623,6 +1626,11 @@ function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predS
 // Bereken de correcte 1-op-1 toewijzing van de 8 geselecteerde nummer-3 landen
 // aan de 8 bracket-slots via greedy bipartite matching (meest beperkte slot eerst).
 function computeThirdAssignment(selected8, predictedStandings) {
+  // Gebruik admin-override als die ingesteld is (na afloop groepsfase)
+  if (bracketOverride && Object.keys(bracketOverride).length > 0) {
+    return { ...bracketOverride };
+  }
+
   // Bouw team → groep (letter) mapping
   const teamToGroup = {};
   for (const [group, order] of Object.entries(predictedStandings)) {
@@ -1715,15 +1723,16 @@ async function renderAdminPanel() {
   const container = document.getElementById("admin-participants-list");
   container.innerHTML = "<p class='loading'>Laden...</p>";
 
-  const snap = await get(ref(db, "participants"));
-  if (!snap.exists()) {
-    container.innerHTML = "<p class='loading'>Geen deelnemers gevonden.</p>";
-    return;
-  }
+  const [partSnap, overrideSnap] = await Promise.all([
+    get(ref(db, "participants")),
+    get(ref(db, "bracketOverride"))
+  ]);
 
-  const participants = snap.val();
-  let html = `<div class="admin-list">`;
+  const participants = partSnap.exists() ? partSnap.val() : {};
+  const savedOverride = overrideSnap.exists() ? overrideSnap.val() : {};
 
+  // ── Deelnemers ──
+  let html = `<h3 style="margin:1rem 0 0.5rem">Deelnemers</h3><div class="admin-list">`;
   for (const [id, p] of Object.entries(participants).sort(([,a],[,b]) => a.name.localeCompare(b.name))) {
     html += `
       <div class="admin-row" id="admin-row-${id}">
@@ -1731,10 +1740,82 @@ async function renderAdminPanel() {
         <button class="btn-delete" onclick="deleteParticipant('${id}', '${p.name}')">🗑 Verwijderen</button>
       </div>`;
   }
-
   html += `</div>`;
+
+  // ── Bracket-override (nummers 3 toewijzing) ──
+  // Zoek alle Last 32 wedstrijden met een "third" slot
+  const thirdSlots = [];
+  for (const [matchId, slot] of Object.entries(LAST_32_BRACKET)) {
+    if (slot.home.type === "third") thirdSlots.push({ matchId, side: "home", groups: slot.home.groups });
+    if (slot.away.type === "third") thirdSlots.push({ matchId, side: "away", groups: slot.away.groups });
+  }
+  thirdSlots.sort((a, b) => {
+    const da = matches[a.matchId]?.utcDate ?? "";
+    const db_ = matches[b.matchId]?.utcDate ?? "";
+    return da.localeCompare(db_);
+  });
+
+  // Verzamel alle landen die als nummer 3 voorspeld worden (uit alle deelnemers)
+  const allPredThirds = new Set();
+  for (const uid of Object.keys(participants)) {
+    const st = calculateGroupStandings();
+    Object.values(st).forEach(order => { if (order[2]) allPredThirds.add(order[2]); });
+  }
+  // Voeg ook alle groep-3e-plaatsers toe vanuit matches
+  Object.values(matches).filter(m => m.stage === "GROUP_STAGE" && m.group)
+    .forEach(m => { if (m.homeTeam) allPredThirds.add(m.homeTeam); if (m.awayTeam) allPredThirds.add(m.awayTeam); });
+
+  html += `
+    <h3 style="margin:1.5rem 0 0.5rem">🔧 Nummer-3 bracket-toewijzing</h3>
+    <p style="font-size:0.85rem;color:#666;margin-bottom:1rem">
+      Na afloop van de groepsfase publiceert FIFA welk nummer-3 land in welk bracket-slot komt.
+      Stel hier de juiste toewijzing in — dit geldt voor alle deelnemers tegelijk.
+    </p>
+    <div class="bracket-override-grid">`;
+
+  for (const slot of thirdSlots) {
+    const m = matches[slot.matchId];
+    const label = slot.side === "home" ? "Thuis" : "Uit";
+    const opponent = slot.side === "home"
+      ? (m?.awayTeam ? t(m.awayTeam) : `3e uit groep ${LAST_32_BRACKET[slot.matchId].away.group ?? "?"}`)
+      : (m?.homeTeam ? t(m.homeTeam) : `winnaar groep ${LAST_32_BRACKET[slot.matchId].home.group ?? "?"}`);
+    const groupsLabel = slot.groups.map(g => `Groep ${g}`).join(", ");
+    const key = `${slot.matchId}-${slot.side}`;
+    const currentVal = savedOverride[key] ?? "";
+    const dateStr = m?.utcDate ? new Date(m.utcDate).toLocaleDateString("nl-NL", { day:"numeric", month:"short" }) : "";
+
+    html += `<div class="override-row">
+      <div class="override-info">
+        <strong>${label}ploeg wedstrijd ${dateStr}</strong>
+        <span>vs ${opponent}</span>
+        <span class="override-groups">(3e uit: ${groupsLabel})</span>
+      </div>
+      <select class="override-select" data-key="${key}">
+        <option value="">– nog niet bekend –</option>
+        ${Array.from(allPredThirds).sort().map(team =>
+          `<option value="${team}" ${team === currentVal ? "selected" : ""}>${t(team)}</option>`
+        ).join("")}
+      </select>
+    </div>`;
+  }
+
+  html += `</div>
+    <button class="btn-primary" style="margin-top:1rem" onclick="saveBracketOverride()">💾 Toewijzing opslaan voor alle deelnemers</button>
+    <div id="override-save-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>`;
+
   container.innerHTML = html;
 }
+
+window.saveBracketOverride = async function() {
+  const status = document.getElementById("override-save-status");
+  status.textContent = "⏳ Opslaan...";
+  const override = {};
+  document.querySelectorAll(".override-select").forEach(sel => {
+    if (sel.value) override[sel.dataset.key] = sel.value;
+  });
+  await set(ref(db, "bracketOverride"), Object.keys(override).length ? override : null);
+  status.textContent = "✅ Opgeslagen! Alle deelnemers zien nu de bijgewerkte bracket.";
+};
 
 async function deleteParticipant(id, name) {
   if (!confirm(`Weet je zeker dat je "${name}" wilt verwijderen? Dit verwijdert ook alle voorspellingen en punten van deze deelnemer.`)) return;
