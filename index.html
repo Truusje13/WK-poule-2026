@@ -199,6 +199,13 @@
         reg.update();
         setInterval(() => reg.update(), 60000);
       });
+
+      // Herlaad de pagina automatisch als er een nieuwe versie is
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data?.type === 'SW_UPDATED') {
+          window.location.reload();
+        }
+      });
     }
   </script>
 </body>

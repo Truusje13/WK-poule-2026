@@ -1,35 +1,37 @@
-const CACHE_NAME = "wk-poule-v1";
+const CACHE_VERSION = "wk-poule-v2";
 const ASSETS = ["/", "/index.html", "/style.css", "/app.js"];
 
-// Bij installatie: sla de bestanden op in cache
+// Bij installatie: cache vullen en meteen activeren
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE_VERSION).then(cache => cache.addAll(ASSETS))
   );
-  self.skipWaiting();
+  self.skipWaiting(); // Nieuwe SW activeert meteen, wacht niet op sluiten tabs
 });
 
-// Bij activatie: verwijder oude cache-versies
+// Bij activatie: oude caches weggooien en pagina's herladen
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+      Promise.all(keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim()) // Neem direct controle over alle open tabs
   );
-  self.clients.claim();
+
+  // Stuur alle open tabs een signaal om te herladen
+  self.clients.matchAll({ type: "window" }).then(clients => {
+    clients.forEach(client => client.postMessage({ type: "SW_UPDATED" }));
+  });
 });
 
-// Network-first: altijd proberen van de server te laden.
-// Alleen bij netwerk-fout valt hij terug op de cache (offline-gebruik).
+// Network-first: altijd verse versie proberen, cache alleen als fallback
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Sla de verse versie op in cache
         const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        caches.open(CACHE_VERSION).then(cache => cache.put(event.request, clone));
         return response;
       })
       .catch(() => caches.match(event.request))
