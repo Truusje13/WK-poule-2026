@@ -88,6 +88,37 @@ function getLocalUID(name) {
   return uid;
 }
 
+// Centrale login-functie: migreert oude data indien nodig en zet currentUser
+async function loginUser(name, goTo = "standings") {
+  const localUID = getLocalUID(name);
+
+  // Zoek of er data staat onder een andere key (oud Firebase-UID of oud push-key)
+  const partSnap = await get(ref(db, "participants"));
+  if (partSnap.exists()) {
+    const existing = Object.entries(partSnap.val()).find(
+      ([key, p]) => p.name.toLowerCase() === name.toLowerCase() && key !== localUID
+    );
+    if (existing) {
+      const oldKey = existing[0];
+      for (const node of ["predictions", "thirdplace", "thirdadvance"]) {
+        const oldSnap = await get(ref(db, `${node}/${oldKey}`));
+        if (oldSnap.exists()) await set(ref(db, `${node}/${localUID}`), oldSnap.val());
+      }
+      await Promise.all([
+        set(ref(db, `participants/${oldKey}`), null),
+        set(ref(db, `standings/${oldKey}`), null),
+      ]);
+    }
+  }
+
+  await update(ref(db, `participants/${localUID}`), { name, joinedAt: Date.now() });
+  currentUser = { id: localUID, name };
+  localStorage.setItem("poule_name", name);
+  setLoggedIn();
+  await loadMatches();
+  showView(goTo);
+}
+
 async function init() {
   if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) {
     showConfigError();
@@ -101,15 +132,9 @@ async function init() {
   // Anonieme auth voor schrijfrechten (auth != null in Firebase-regels)
   try { await signInAnonymously(auth); } catch (e) { console.warn("Auth fout:", e); }
 
-  // Terugkerende gebruiker herkennen via opgeslagen naam
   const savedName = localStorage.getItem("poule_name");
   if (savedName) {
-    const localUID = getLocalUID(savedName);
-    currentUser = { id: localUID, name: savedName };
-    await update(ref(db, `participants/${localUID}`), { name: savedName });
-    setLoggedIn();
-    await loadMatches();
-    showView("standings");
+    await loginUser(savedName, "standings");
   } else {
     showView("join");
   }
@@ -148,40 +173,7 @@ async function joinPoule() {
   btn.textContent = "Bezig...";
 
   try {
-    // Eigen stabiele UUID per naam — onafhankelijk van Firebase UID
-    const localUID = getLocalUID(name);
-
-    // Kijk of naam al bestaat onder een andere key (migratie van oud systeem)
-    const snap = await get(ref(db, "participants"));
-    if (snap.exists()) {
-      const participants = snap.val();
-      const existing = Object.entries(participants).find(
-        ([key, p]) => p.name.toLowerCase() === name.toLowerCase() && key !== localUID
-      );
-      if (existing) {
-        const oldKey = existing[0];
-        // Migreer data van oude key naar nieuwe localUID
-        const nodes = ["predictions", "thirdplace", "thirdadvance"];
-        for (const node of nodes) {
-          const oldSnap = await get(ref(db, `${node}/${oldKey}`));
-          if (oldSnap.exists()) {
-            await set(ref(db, `${node}/${localUID}`), oldSnap.val());
-          }
-        }
-        await Promise.all([
-          set(ref(db, `participants/${oldKey}`), null),
-          set(ref(db, `standings/${oldKey}`), null),
-        ]);
-      }
-    }
-
-    // Sla deelnemer op (update zodat hidden-vlag bewaard blijft)
-    await update(ref(db, `participants/${localUID}`), { name, joinedAt: Date.now() });
-    currentUser = { id: localUID, name };
-    localStorage.setItem("poule_name", name);
-    setLoggedIn();
-    await loadMatches();
-    showView("predictions");
+    await loginUser(name, "predictions");
   } catch (e) {
     console.error(e);
     if (e?.code?.startsWith("auth") || e?.message?.includes("permission") || e?.message?.includes("PERMISSION")) {
