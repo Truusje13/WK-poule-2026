@@ -1638,11 +1638,14 @@ function computeThirdAssignment(selected8, predictedStandings) {
     return { ...bracketOverride };
   }
 
-  // Bouw team → groep (letter) mapping
+  // Bouw team → groep (letter) mapping op basis van ALLE teams per groep,
+  // niet alleen de voorspelde 3e plaatser. Zo werkt het ook als een deelnemer
+  // een team heeft aangevinkt dat in zijn score-voorspellingen niet als 3e eindigt.
   const teamToGroup = {};
-  for (const [group, order] of Object.entries(predictedStandings)) {
-    const third = order[2];
-    if (third) teamToGroup[third] = group.replace("GROUP_", "");
+  const teamsPerGroup = getTeamsPerGroup();
+  for (const [group, teams] of Object.entries(teamsPerGroup)) {
+    const g = group.replace("GROUP_", "");
+    for (const team of teams) teamToGroup[team] = g;
   }
 
   // Verzamel alle "third" slots uit het bracket
@@ -1652,25 +1655,35 @@ function computeThirdAssignment(selected8, predictedStandings) {
     if (slot.away.type === "third") thirdSlots.push({ matchId, side: "away", groups: slot.away.groups });
   }
 
-  // Sorteer op minste kandidaten (most-constrained first)
+  // Bouw kandidatenlijst per slot
   const slotsWithCandidates = thirdSlots.map(s => ({
-    ...s,
+    key: `${s.matchId}-${s.side}`,
     candidates: selected8.filter(team => {
       const g = teamToGroup[team];
       return g && s.groups.includes(g);
     })
-  })).sort((a, b) => a.candidates.length - b.candidates.length);
+  }));
 
-  // Greedy toewijzing
-  const assignment = {}; // `${matchId}-${side}` -> team
-  const assigned = new Set();
-  for (const slot of slotsWithCandidates) {
-    const available = slot.candidates.filter(t => !assigned.has(t));
-    if (available.length > 0) {
-      assignment[`${slot.matchId}-${slot.side}`] = available[0];
-      assigned.add(available[0]);
+  // Backtracking: vindt altijd een geldige 1-op-1 toewijzing als die bestaat
+  const assignment = {};
+  const assigned  = new Set();
+
+  function tryAssign(idx) {
+    if (idx >= slotsWithCandidates.length) return true;
+    const slot = slotsWithCandidates[idx];
+    for (const team of slot.candidates) {
+      if (!assigned.has(team)) {
+        assignment[slot.key] = team;
+        assigned.add(team);
+        if (tryAssign(idx + 1)) return true;
+        delete assignment[slot.key];
+        assigned.delete(team);
+      }
     }
+    return false;
   }
+
+  tryAssign(0);
   return assignment;
 }
 
