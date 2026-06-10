@@ -69,6 +69,7 @@ let currentUser    = null;  // { id, name }
 let matches        = {};    // matchId -> match object
 let bracketOverride = {};   // admin-override voor nummer-3 toewijzing
 let unsubStandings = null;
+let viewingUser    = null;  // { id, name } — deelnemer wiens voorspellingen je bekijkt
 
 // ============================================================
 // INIT
@@ -209,6 +210,11 @@ function showView(name) {
   document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
   document.getElementById(`view-${name}`).classList.remove("hidden");
   if (name === "predictions") renderPredictions();
+  if (name === "other-predictions") {
+    const titleEl = document.getElementById("other-pred-title");
+    if (titleEl) titleEl.textContent = `Voorspellingen van ${viewingUser?.name ?? ""}`;
+    renderPredictions(viewingUser?.id);
+  }
   if (name === "standings") renderStandings();
   if (name === "admin") {
     document.getElementById("admin-login").classList.remove("hidden");
@@ -316,10 +322,11 @@ function calcPoints(match, pred) {
 // VOORSPELLINGEN RENDEREN
 // ============================================================
 
-async function renderPredictions() {
-  const container = document.getElementById("predictions-container");
-  const locked         = new Date() > DEADLINE;
-  const thirdAdvLocked = new Date() > THIRD_ADV_DEADLINE;
+async function renderPredictions(overrideUid = null) {
+  const targetUid = overrideUid ?? currentUser.id;
+  const container = document.getElementById(overrideUid ? "other-predictions-container" : "predictions-container");
+  const locked         = overrideUid ? true : new Date() > DEADLINE;
+  const thirdAdvLocked = overrideUid ? true : new Date() > THIRD_ADV_DEADLINE;
 
   if (Object.keys(matches).length === 0) {
     container.innerHTML = "<p class='loading'>⏳ Wedstrijden laden...</p>";
@@ -348,9 +355,9 @@ async function renderPredictions() {
   }
 
   const [predSnap, thirdPlaceSnap, thirdAdvSnap2] = await Promise.all([
-    get(ref(db, `predictions/${currentUser.id}`)),
-    get(ref(db, `thirdplace/${currentUser.id}`)),
-    get(ref(db, `thirdadvance/${currentUser.id}`)),
+    get(ref(db, `predictions/${targetUid}`)),
+    get(ref(db, `thirdplace/${targetUid}`)),
+    get(ref(db, `thirdadvance/${targetUid}`)),
   ]);
   const existing        = predSnap.exists()       ? predSnap.val()       : {};
   const thirdPlaceData  = thirdPlaceSnap.exists()  ? thirdPlaceSnap.val() : {};
@@ -374,7 +381,9 @@ async function renderPredictions() {
   let html = "";
 
   if (locked) {
-    html += `<div class="notice">⏰ De deadline is verstreken — voorspellingen zijn gesloten. Hieronder zie je jouw keuzes en de punten die je hebt gescoord.</div>`;
+    html += overrideUid
+      ? `<div class="notice">📋 Voorspellingen van <strong>${viewingUser?.name ?? ""}</strong> — alleen lezen.</div>`
+      : `<div class="notice">⏰ De deadline is verstreken — voorspellingen zijn gesloten. Hieronder zie je jouw keuzes en de punten die je hebt gescoord.</div>`;
   }
 
   for (const stage of STAGE_ORDER) {
@@ -609,31 +618,33 @@ async function renderPredictions() {
     <div class="wc-team" id="wc-team">–</div>
   </div>`;
 
-  if (!locked || !thirdAdvLocked) {
+  if (!overrideUid && (!locked || !thirdAdvLocked)) {
     html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
   }
 
   container.innerHTML = html;
 
   // Initialiseer tellers en overzichten
-  updateThirdAdvCount();
-  updatePredictedAdvancement();
-  updateGroupStandingsOverview();
-  updateWorldChampion();
+  if (!overrideUid) updateThirdAdvCount();
+  updatePredictedAdvancement(overrideUid ? existing : null, overrideUid ? thirdAdvData : null);
+  updateGroupStandingsOverview(overrideUid ? existing : null);
+  updateWorldChampion(overrideUid ? existing : null, overrideUid ? thirdAdvData : null);
 
-  let autoSaveTimer = null;
-  container.querySelectorAll("input[type=number]").forEach(input => {
-    input.addEventListener("input", () => {
-      updatePredictedAdvancement();
-      updateGroupStandingsOverview();
-      updateKnockoutTeamLabels();
-      updateWorldChampion();
-      // Auto-opslaan: 2 seconden na de laatste invoer
-      clearTimeout(autoSaveTimer);
-      showAutoSaveStatus("⏳ Wordt opgeslagen...");
-      autoSaveTimer = setTimeout(() => autoSave(), 2000);
+  if (!overrideUid) {
+    let autoSaveTimer = null;
+    container.querySelectorAll("input[type=number]").forEach(input => {
+      input.addEventListener("input", () => {
+        updatePredictedAdvancement();
+        updateGroupStandingsOverview();
+        updateKnockoutTeamLabels();
+        updateWorldChampion();
+        // Auto-opslaan: 2 seconden na de laatste invoer
+        clearTimeout(autoSaveTimer);
+        showAutoSaveStatus("⏳ Wordt opgeslagen...");
+        autoSaveTimer = setTimeout(() => autoSave(), 2000);
+      });
     });
-  });
+  }
 }
 
 function showAutoSaveStatus(msg) {
@@ -735,11 +746,11 @@ function readCurrentThirdAdvData() {
   return selected;
 }
 
-function updateGroupStandingsOverview() {
+function updateGroupStandingsOverview(existingPreds = null) {
   const container = document.getElementById("group-standings-overview");
   if (!container) return;
 
-  const currentPreds = readCurrentPreds();
+  const currentPreds = existingPreds ?? readCurrentPreds();
   const { standings: predStandings, teamStats: predStats } = calculatePredictedGroupData(currentPreds);
   const actualStandings = calculateGroupStandings();          // werkelijke stand (leeg als niet gespeeld)
   const actualStats     = calculateActualTeamStats();         // werkelijke teamstats
@@ -836,12 +847,12 @@ function calculateActualTeamStats() {
   return stats;
 }
 
-function updateWorldChampion() {
+function updateWorldChampion(existingPreds = null, existingThirdAdv = null) {
   const el = document.getElementById("wc-team");
   if (!el) return;
 
-  const currentPreds       = readCurrentPreds();
-  const currentThirdAdv    = readCurrentThirdAdvData();
+  const currentPreds       = existingPreds ?? readCurrentPreds();
+  const currentThirdAdv    = existingThirdAdv ?? readCurrentThirdAdvData();
   const { standings: pred, teamStats } = calculatePredictedGroupData(currentPreds);
   const thirdAssignment    = computeThirdAssignment(currentThirdAdv, pred);
   const cache              = {};
@@ -916,8 +927,8 @@ function updateKnockoutTeamLabels() {
   });
 }
 
-function updatePredictedAdvancement() {
-  const currentPreds  = readCurrentPreds();
+function updatePredictedAdvancement(existingPreds = null, existingThirdAdv = null) {
+  const currentPreds  = existingPreds ?? readCurrentPreds();
   const actual        = getActuallyAdvanced();
 
   // ── Nummer-3 kaartjes bijwerken ──
@@ -958,7 +969,7 @@ function updatePredictedAdvancement() {
     if (sortedGroups.length === 0) {
       grid.innerHTML = `<p class="predicted-empty">Vul groepsscores in om de doorkomst te zien.</p>`;
     } else {
-      const selectedThirds = readCurrentThirdAdvData();
+      const selectedThirds = existingThirdAdv ?? readCurrentThirdAdvData();
       let html = "";
 
       for (const group of sortedGroups) {
@@ -1219,9 +1230,10 @@ function renderStandings() {
       Object.values(participants).filter(p => p.hidden).map(p => p.name)
     );
 
+    const afterDeadline = new Date() > DEADLINE;
     const visibleRows = Object.entries(snap.val())
       .filter(([uid]) => validUids.has(uid))          // alleen bestaande deelnemers
-      .map(([, v]) => v)
+      .map(([uid, v]) => ({ ...v, uid }))
       .filter(r => !hiddenNames.has(r.name))          // verberg verborgen deelnemers
       .sort((a, b) => b.points - a.points || b.exactCount - a.exactCount || b.outcomeCount - a.outcomeCount);
 
@@ -1247,9 +1259,13 @@ function renderStandings() {
     visibleRows.forEach((s, i) => {
       const isMe = s.name === currentUser?.name;
       const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`;
+      const canViewPreds = afterDeadline && !isMe;
+      const nameHtml = canViewPreds
+        ? `<button class="name-link" onclick="showOtherPredictions('${s.uid}', '${s.name.replace(/'/g, "\\'")}')">${s.name}</button>`
+        : s.name;
       html += `<tr class="${isMe ? "me" : ""}">
         <td class="rank">${medal}</td>
-        <td>${s.name}${isMe ? " 👈" : ""}</td>
+        <td>${nameHtml}${isMe ? " 👈" : ""}</td>
         <td class="pts-cell">${s.points}</td>
         <td>${s.exactCount}</td>
         <td>${s.outcomeCount}</td>
@@ -1951,6 +1967,11 @@ function triggerPenaltySave() {
   clearTimeout(window._penaltySaveTimer);
   window._penaltySaveTimer = setTimeout(() => autoSave(), 1000);
 }
+
+window.showOtherPredictions = function(uid, name) {
+  viewingUser = { id: uid, name };
+  showView('other-predictions');
+};
 
 window.showView = showView;
 window.renderPredictions = renderPredictions;

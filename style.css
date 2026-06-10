@@ -444,6 +444,21 @@ main {
 
 .pts-cell { font-weight: 800; font-size: 1.05rem; }
 
+/* Klikbare naam in klassement (na deadline) */
+.name-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--orange-dark);
+  font-size: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.name-link:hover { color: var(--orange); }
+
 /* ===== REGELS ===== */
 .rules-card {
   max-width: 680px;
