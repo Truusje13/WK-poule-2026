@@ -1647,16 +1647,15 @@ function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predS
 }
 
 // Bereken de correcte 1-op-1 toewijzing van de 8 geselecteerde nummer-3 landen
-// aan de 8 bracket-slots via greedy bipartite matching (meest beperkte slot eerst).
-function computeThirdAssignment(selected8, predictedStandings) {
+// aan de 8 bracket-slots via backtracking, met greedy fallback als geen perfecte
+// matching bestaat.
+function computeThirdAssignment(selected8Raw, predictedStandings) {
   // Gebruik admin-override als die ingesteld is (na afloop groepsfase)
   if (bracketOverride && Object.keys(bracketOverride).length > 0) {
     return { ...bracketOverride };
   }
 
-  // Bouw team → groep (letter) mapping op basis van ALLE teams per groep,
-  // niet alleen de voorspelde 3e plaatser. Zo werkt het ook als een deelnemer
-  // een team heeft aangevinkt dat in zijn score-voorspellingen niet als 3e eindigt.
+  // Bouw team → groep (letter) mapping op basis van ALLE teams per groep
   const teamToGroup = {};
   const teamsPerGroup = getTeamsPerGroup();
   for (const [group, teams] of Object.entries(teamsPerGroup)) {
@@ -1664,21 +1663,35 @@ function computeThirdAssignment(selected8, predictedStandings) {
     for (const team of teams) teamToGroup[team] = g;
   }
 
-  // Verzamel alle "third" slots uit het bracket
+  // Normaliseer invoer: Firebase kan een array als object terugsturen
+  // ({0:"X",1:"Y"} i.p.v. ["X","Y"]). Filter ook null/onbekende teamnamen.
+  const rawArray = Array.isArray(selected8Raw)
+    ? selected8Raw
+    : Object.values(selected8Raw || {});
+  const selected8 = rawArray.filter(team => team && teamToGroup[team]);
+
+  if (selected8.length < rawArray.filter(Boolean).length) {
+    console.warn("[poule] Onbekende teamnamen in nummer-3 selectie (niet gevonden in wedstrijddata):",
+      rawArray.filter(t => t && !teamToGroup[t]));
+  }
+
+  // Verzamel alle "third" slots, meest beperkte slots eerst
   const thirdSlots = [];
   for (const [matchId, slot] of Object.entries(LAST_32_BRACKET)) {
     if (slot.home.type === "third") thirdSlots.push({ matchId, side: "home", groups: slot.home.groups });
     if (slot.away.type === "third") thirdSlots.push({ matchId, side: "away", groups: slot.away.groups });
   }
 
-  // Bouw kandidatenlijst per slot
-  const slotsWithCandidates = thirdSlots.map(s => ({
-    key: `${s.matchId}-${s.side}`,
-    candidates: selected8.filter(team => {
-      const g = teamToGroup[team];
-      return g && s.groups.includes(g);
-    })
-  }));
+  // Bouw kandidatenlijst per slot, meest beperkte slots eerst
+  const slotsWithCandidates = thirdSlots
+    .map(s => ({
+      key: `${s.matchId}-${s.side}`,
+      candidates: selected8.filter(team => {
+        const g = teamToGroup[team];
+        return g && s.groups.includes(g);
+      })
+    }))
+    .sort((a, b) => a.candidates.length - b.candidates.length);
 
   // Backtracking: vindt altijd een geldige 1-op-1 toewijzing als die bestaat
   const assignment = {};
@@ -1699,7 +1712,24 @@ function computeThirdAssignment(selected8, predictedStandings) {
     return false;
   }
 
-  tryAssign(0);
+  const success = tryAssign(0);
+
+  // Greedy fallback: als geen perfecte matching bestaat, vul zo veel mogelijk slots
+  if (!success) {
+    console.warn("[poule] Geen perfecte nummer-3 toewijzing gevonden. Geselecteerde teams:", selected8,
+      "Slots:", slotsWithCandidates.map(s => ({ key: s.key, candidates: s.candidates })));
+    const usedTeams = new Set();
+    for (const slot of slotsWithCandidates) {
+      for (const team of slot.candidates) {
+        if (!usedTeams.has(team)) {
+          assignment[slot.key] = team;
+          usedTeams.add(team);
+          break;
+        }
+      }
+    }
+  }
+
   return assignment;
 }
 
