@@ -1890,6 +1890,14 @@ async function renderAdminPanel() {
   const standingsData = standSnap.exists() ? standSnap.val() : {};
 
   if (orphanedUids.length > 0) {
+    // Haal thirdadvance op voor elk orphaned UID zodat we het bracket kunnen oplossen
+    const orphanThirdAdv = {};
+    await Promise.all(orphanedUids.map(async uid => {
+      const snap = await get(ref(db, `thirdadvance/${uid}`));
+      const raw = snap.exists() ? snap.val() : [];
+      orphanThirdAdv[uid] = Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw || {}).filter(Boolean);
+    }));
+
     html += `
       <h3 style="margin:1.5rem 0 0.5rem">🔁 Data-herstel</h3>
       <p style="font-size:0.85rem;color:#666;margin-bottom:1rem">
@@ -1903,34 +1911,54 @@ async function renderAdminPanel() {
       const count = Object.keys(orphanPreds).length;
       const knownName = standingsData[orphanUid]?.name ?? "onbekend";
 
-      // Toon de eerste 3 groepsscores + finale + troostfinale als hint
+      // Bereken bracket om teamnamen te achterhalen
+      const { standings: predSt, teamStats: predTs } = calculatePredictedGroupData(orphanPreds);
+      const thirdAss = computeThirdAssignment(orphanThirdAdv[orphanUid] || [], predSt);
+      const rc = {};
+      const FINAL_ID = "537390", THIRD_ID = "537389";
+      const finalHome = resolveRoundTeam("537387", true,  orphanPreds, thirdAss, predSt, predTs, rc);
+      const finalAway = resolveRoundTeam("537388", true,  orphanPreds, thirdAss, predSt, predTs, rc);
+      const thirdHome = resolveRoundTeam("537387", false, orphanPreds, thirdAss, predSt, predTs, rc);
+      const thirdAway = resolveRoundTeam("537388", false, orphanPreds, thirdAss, predSt, predTs, rc);
+
+      // Wereldkampioen bepalen
+      const fp = orphanPreds[FINAL_ID];
+      let champion = null;
+      if (fp?.home !== undefined && finalHome && finalAway) {
+        const ph = parseInt(fp.home), pa = parseInt(fp.away);
+        if (ph > pa) champion = finalHome;
+        else if (pa > ph) champion = finalAway;
+        else if (fp.penalty && fp.penaltyWinner) champion = fp.penaltyWinner === "home" ? finalHome : finalAway;
+      }
+
+      const finalStr  = fp?.home !== undefined
+        ? `${finalHome ? t(finalHome) : "?"} vs ${finalAway ? t(finalAway) : "?"}: <strong>${fp.home}–${fp.away}</strong>`
+        : null;
+      const tp = orphanPreds[THIRD_ID];
+      const thirdStr  = tp?.home !== undefined
+        ? `${thirdHome ? t(thirdHome) : "?"} vs ${thirdAway ? t(thirdAway) : "?"}: <strong>${tp.home}–${tp.away}</strong>`
+        : null;
+      const champStr  = champion ? `🏆 Wereldkampioen: <strong>${t(champion)}</strong>` : null;
+
+      // Eerste 3 groepsscores
       const filledMatches = Object.entries(orphanPreds)
         .filter(([, p]) => p.home !== undefined && p.home !== "")
         .sort(([a], [b]) => a.localeCompare(b))
         .slice(0, 3);
-      const formatPred = ([matchId, p]) => {
+      const hintLines = filledMatches.map(([matchId, p]) => {
         const m = matches[matchId];
-        if (!m) return `wedstrijd ${matchId}: ${p.home}–${p.away}`;
-        return `${t(m.homeTeam)} vs ${t(m.awayTeam)}: <strong>${p.home}–${p.away}</strong>`;
-      };
-      const hintLines = filledMatches.map(formatPred).join(" &nbsp;|&nbsp; ");
-
-      // Finale (537390) en troostfinale (537389)
-      const FINAL_ID = "537390", THIRD_ID = "537389";
-      const finalPred = orphanPreds[FINAL_ID];
-      const thirdPred = orphanPreds[THIRD_ID];
-      const knockoutHints = [
-        finalPred?.home !== undefined ? `Finale: <strong>${finalPred.home}–${finalPred.away}</strong>` : null,
-        thirdPred?.home !== undefined ? `Troostfinale: <strong>${thirdPred.home}–${thirdPred.away}</strong>` : null,
-      ].filter(Boolean).join(" &nbsp;|&nbsp; ");
+        return m ? `${t(m.homeTeam)} vs ${t(m.awayTeam)}: <strong>${p.home}–${p.away}</strong>` : null;
+      }).filter(Boolean).join(" &nbsp;|&nbsp; ");
 
       html += `
         <div class="admin-row" style="flex-wrap:wrap;gap:0.5rem;align-items:center">
           <div style="width:100%">
             <strong>${knownName}</strong>
             <span style="font-size:0.8rem;color:#888">(${count} voorspellingen)</span>
-            ${hintLines ? `<div style="font-size:0.78rem;color:#555;margin-top:0.2rem">Eerste scores: ${hintLines}</div>` : ""}
-            ${knockoutHints ? `<div style="font-size:0.78rem;color:#555;margin-top:0.1rem">Knockout: ${knockoutHints}</div>` : ""}
+            ${champStr  ? `<div style="font-size:0.82rem;color:#333;margin-top:0.3rem">${champStr}</div>` : ""}
+            ${finalStr  ? `<div style="font-size:0.78rem;color:#555;margin-top:0.15rem">Finale: ${finalStr}</div>` : ""}
+            ${thirdStr  ? `<div style="font-size:0.78rem;color:#555;margin-top:0.1rem">Troostfinale: ${thirdStr}</div>` : ""}
+            ${hintLines ? `<div style="font-size:0.78rem;color:#888;margin-top:0.1rem">Eerste groepsscores: ${hintLines}</div>` : ""}
           </div>
           <select id="recover-select-${orphanUid}" style="flex:1;min-width:120px">
             <option value="">– kies deelnemer –</option>
