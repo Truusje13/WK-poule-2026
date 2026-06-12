@@ -42,7 +42,7 @@ const SCORING = {
     CHAMPION:       50
   }
 };
-const DEADLINE           = new Date("2026-06-11T19:00:00Z"); // Eerste wedstrijd WK 2026
+const DEADLINE           = new Date("2026-06-12T19:00:00Z"); // Verlengd tot 21:00 Amsterdam voor Arend
 const THIRD_ADV_DEADLINE = new Date("2026-07-03T12:00:00Z"); // Na groepsfase, vóór eerste Last 32 met nummer-3
 const CACHE_KEY = "poule_matches_v1";
 const RESULTS_CACHE_MINUTES = 30;
