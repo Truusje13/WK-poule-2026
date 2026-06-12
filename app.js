@@ -1880,10 +1880,14 @@ async function renderAdminPanel() {
     <div id="override-save-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>`;
 
   // ── Data-herstel: zwevende predictions koppelen aan deelnemer ──
-  const predSnap = await get(ref(db, "predictions"));
+  const [predSnap, standSnap] = await Promise.all([
+    get(ref(db, "predictions")),
+    get(ref(db, "standings")),
+  ]);
   const predUids = predSnap.exists() ? Object.keys(predSnap.val()) : [];
   const participantUids = new Set(Object.keys(participants));
   const orphanedUids = predUids.filter(uid => !participantUids.has(uid));
+  const standingsData = standSnap.exists() ? standSnap.val() : {};
 
   if (orphanedUids.length > 0) {
     html += `
@@ -1897,9 +1901,11 @@ async function renderAdminPanel() {
     for (const orphanUid of orphanedUids) {
       const orphanPreds = predSnap.val()[orphanUid];
       const count = Object.keys(orphanPreds).length;
+      // Naam ophalen uit standings (blijft bewaard ook als participant verwijderd is)
+      const knownName = standingsData[orphanUid]?.name ?? "onbekend";
       html += `
-        <div class="admin-row" style="flex-wrap:wrap;gap:0.5rem">
-          <span style="font-size:0.8rem;color:#888">ID: ${orphanUid.slice(0,8)}… (${count} voorspellingen)</span>
+        <div class="admin-row" style="flex-wrap:wrap;gap:0.5rem;align-items:center">
+          <span><strong>${knownName}</strong> <span style="font-size:0.8rem;color:#888">(${count} voorspellingen ingevuld)</span></span>
           <select id="recover-select-${orphanUid}" style="flex:1;min-width:120px">
             <option value="">– kies deelnemer –</option>
             ${Object.entries(participants).sort(([,a],[,b]) => a.name.localeCompare(b.name))
