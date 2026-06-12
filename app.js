@@ -103,13 +103,21 @@ async function loginUser(name, goTo = "standings") {
       const oldKey = existing[0];
       for (const node of ["predictions", "thirdplace", "thirdadvance"]) {
         const oldSnap = await get(ref(db, `${node}/${oldKey}`));
-        if (oldSnap.exists()) await set(ref(db, `${node}/${localUID}`), oldSnap.val());
-        await set(ref(db, `${node}/${oldKey}`), null);
+        if (oldSnap.exists()) {
+          await set(ref(db, `${node}/${localUID}`), oldSnap.val());
+          // Verifieer dat de data er echt staat vóór verwijderen
+          const verifySnap = await get(ref(db, `${node}/${localUID}`));
+          if (verifySnap.exists()) {
+            await set(ref(db, `${node}/${oldKey}`), null);
+          }
+        }
       }
       await Promise.all([
         set(ref(db, `participants/${oldKey}`), null),
         set(ref(db, `standings/${oldKey}`), null),
       ]);
+      // Herbereken punten na migratie zodat klassement meteen klopt
+      await recalculateStandings(localUID);
     }
   }
 
@@ -355,11 +363,17 @@ async function renderPredictions(overrideUid = null) {
     }
   }
 
-  const [predSnap, thirdPlaceSnap, thirdAdvSnap2] = await Promise.all([
-    get(ref(db, `predictions/${targetUid}`)),
-    get(ref(db, `thirdplace/${targetUid}`)),
-    get(ref(db, `thirdadvance/${targetUid}`)),
-  ]);
+  let predSnap, thirdPlaceSnap, thirdAdvSnap2;
+  try {
+    [predSnap, thirdPlaceSnap, thirdAdvSnap2] = await Promise.all([
+      get(ref(db, `predictions/${targetUid}`)),
+      get(ref(db, `thirdplace/${targetUid}`)),
+      get(ref(db, `thirdadvance/${targetUid}`)),
+    ]);
+  } catch(e) {
+    container.innerHTML = `<div class="notice" style="margin-top:1rem">⚠️ Voorspellingen konden niet worden geladen.<br><small style="opacity:0.7">Fout: ${e.message}</small><p style="margin-top:0.75rem"><button onclick="renderPredictions(${overrideUid ? `'${overrideUid}'` : ''})" class="btn-secondary">🔄 Opnieuw proberen</button></p></div>`;
+    return;
+  }
   const existing        = predSnap.exists()       ? predSnap.val()       : {};
   const thirdPlaceData  = thirdPlaceSnap.exists()  ? thirdPlaceSnap.val() : {};
   const thirdAdvData    = thirdAdvSnap2.exists()   ? thirdAdvSnap2.val()  : [];
@@ -1975,8 +1989,50 @@ async function renderAdminPanel() {
     html += `</div><div id="recover-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>`;
   }
 
+  // ── Backup export ──
+  html += `
+    <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #eee">
+      <h3 style="margin-bottom:0.5rem">💾 Backup</h3>
+      <p style="font-size:0.9rem;color:#666;margin-bottom:0.75rem">Download alle voorspellingen en standen als JSON-bestand. Bewaar dit regelmatig als veiligheid.</p>
+      <button class="btn-secondary" onclick="downloadBackup()">⬇️ Download backup</button>
+      <div id="backup-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>
+    </div>`;
+
   container.innerHTML = html;
 }
+
+window.downloadBackup = async function() {
+  const status = document.getElementById("backup-status");
+  status.textContent = "⏳ Backup maken...";
+  try {
+    const [partSnap, predSnap, standSnap, thirdPlaceSnap, thirdAdvSnap] = await Promise.all([
+      get(ref(db, "participants")),
+      get(ref(db, "predictions")),
+      get(ref(db, "standings")),
+      get(ref(db, "thirdplace")),
+      get(ref(db, "thirdadvance")),
+    ]);
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      participants: partSnap.exists()   ? partSnap.val()   : {},
+      predictions:  predSnap.exists()   ? predSnap.val()   : {},
+      standings:    standSnap.exists()  ? standSnap.val()  : {},
+      thirdplace:   thirdPlaceSnap.exists() ? thirdPlaceSnap.val() : {},
+      thirdadvance: thirdAdvSnap.exists()   ? thirdAdvSnap.val()   : {},
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `wk-poule-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    status.textContent = "✅ Backup gedownload!";
+    setTimeout(() => { status.textContent = ""; }, 3000);
+  } catch(e) {
+    status.textContent = "❌ Fout: " + e.message;
+  }
+};
 
 window.recoverPredictions = async function(orphanUid) {
   const select = document.getElementById(`recover-select-${orphanUid}`);
