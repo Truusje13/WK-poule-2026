@@ -1179,13 +1179,17 @@ async function recalculateStandings(participantId) {
   }
 
   // ── 3. Nummer-3 punten ──
-  // Voorspelde 3e plaatsers komen uit de score-voorspellingen, niet uit aparte dropdown
+  // Alleen toekennen als ALLE wedstrijden in een groep gespeeld zijn
   const predictedGroupStandings3 = calculatePredictedGroupStandings(preds);
   const actualGroupStand         = calculateGroupStandings();
   const actualAdvThirds          = getActualAdvancingThirds();
 
   if (Object.keys(actualGroupStand).length > 0) {
     for (const [group, actualOrder] of Object.entries(actualGroupStand)) {
+      // Controleer of alle wedstrijden in deze groep gespeeld zijn
+      const groupMatches = Object.values(matches).filter(m => m.stage === "GROUP_STAGE" && m.group === group);
+      if (!groupMatches.every(m => m.status === "FINISHED")) continue;
+
       const actualThird    = actualOrder[2];
       const predictedThird = predictedGroupStandings3[group]?.[2];
       if (!actualThird || !predictedThird) continue;
