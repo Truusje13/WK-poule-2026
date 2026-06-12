@@ -43,8 +43,11 @@ jobs:
 
       - name: Schrijf naar Firebase Realtime Database
         run: |
-          curl -s -X PUT \
-            "${{ secrets.FIREBASE_DB_URL }}/matches.json" \
+          RESPONSE=$(curl -s -o response.json -w "%{http_code}" -X PUT \
+            "${{ secrets.FIREBASE_DB_URL }}/matches.json?auth=${{ secrets.FIREBASE_DB_SECRET }}" \
             -H "Content-Type: application/json" \
-            -d @matches_firebase.json
+            -d @matches_firebase.json)
+          echo "HTTP status: $RESPONSE"
+          cat response.json
+          if [ "$RESPONSE" != "200" ]; then exit 1; fi
           echo "✅ Firebase bijgewerkt"
