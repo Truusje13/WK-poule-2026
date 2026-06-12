@@ -104,6 +104,7 @@ async function loginUser(name, goTo = "standings") {
       for (const node of ["predictions", "thirdplace", "thirdadvance"]) {
         const oldSnap = await get(ref(db, `${node}/${oldKey}`));
         if (oldSnap.exists()) await set(ref(db, `${node}/${localUID}`), oldSnap.val());
+        await set(ref(db, `${node}/${oldKey}`), null);
       }
       await Promise.all([
         set(ref(db, `participants/${oldKey}`), null),
