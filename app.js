@@ -1901,11 +1901,26 @@ async function renderAdminPanel() {
     for (const orphanUid of orphanedUids) {
       const orphanPreds = predSnap.val()[orphanUid];
       const count = Object.keys(orphanPreds).length;
-      // Naam ophalen uit standings (blijft bewaard ook als participant verwijderd is)
       const knownName = standingsData[orphanUid]?.name ?? "onbekend";
+
+      // Toon de eerste 3 ingevulde scores als hint om te identificeren
+      const filledMatches = Object.entries(orphanPreds)
+        .filter(([, p]) => p.home !== undefined && p.home !== "")
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(0, 3);
+      const hintLines = filledMatches.map(([matchId, p]) => {
+        const m = matches[matchId];
+        if (!m) return `wedstrijd ${matchId}: ${p.home}–${p.away}`;
+        return `${t(m.homeTeam)} vs ${t(m.awayTeam)}: <strong>${p.home}–${p.away}</strong>`;
+      }).join(" &nbsp;|&nbsp; ");
+
       html += `
         <div class="admin-row" style="flex-wrap:wrap;gap:0.5rem;align-items:center">
-          <span><strong>${knownName}</strong> <span style="font-size:0.8rem;color:#888">(${count} voorspellingen ingevuld)</span></span>
+          <div style="width:100%">
+            <strong>${knownName}</strong>
+            <span style="font-size:0.8rem;color:#888">(${count} voorspellingen)</span>
+            ${hintLines ? `<div style="font-size:0.78rem;color:#555;margin-top:0.2rem">Eerste scores: ${hintLines}</div>` : ""}
+          </div>
           <select id="recover-select-${orphanUid}" style="flex:1;min-width:120px">
             <option value="">– kies deelnemer –</option>
             ${Object.entries(participants).sort(([,a],[,b]) => a.name.localeCompare(b.name))
