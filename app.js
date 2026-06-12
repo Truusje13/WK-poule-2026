@@ -1903,16 +1903,26 @@ async function renderAdminPanel() {
       const count = Object.keys(orphanPreds).length;
       const knownName = standingsData[orphanUid]?.name ?? "onbekend";
 
-      // Toon de eerste 3 ingevulde scores als hint om te identificeren
+      // Toon de eerste 3 groepsscores + finale + troostfinale als hint
       const filledMatches = Object.entries(orphanPreds)
         .filter(([, p]) => p.home !== undefined && p.home !== "")
         .sort(([a], [b]) => a.localeCompare(b))
         .slice(0, 3);
-      const hintLines = filledMatches.map(([matchId, p]) => {
+      const formatPred = ([matchId, p]) => {
         const m = matches[matchId];
         if (!m) return `wedstrijd ${matchId}: ${p.home}–${p.away}`;
         return `${t(m.homeTeam)} vs ${t(m.awayTeam)}: <strong>${p.home}–${p.away}</strong>`;
-      }).join(" &nbsp;|&nbsp; ");
+      };
+      const hintLines = filledMatches.map(formatPred).join(" &nbsp;|&nbsp; ");
+
+      // Finale (537390) en troostfinale (537389)
+      const FINAL_ID = "537390", THIRD_ID = "537389";
+      const finalPred = orphanPreds[FINAL_ID];
+      const thirdPred = orphanPreds[THIRD_ID];
+      const knockoutHints = [
+        finalPred?.home !== undefined ? `Finale: <strong>${finalPred.home}–${finalPred.away}</strong>` : null,
+        thirdPred?.home !== undefined ? `Troostfinale: <strong>${thirdPred.home}–${thirdPred.away}</strong>` : null,
+      ].filter(Boolean).join(" &nbsp;|&nbsp; ");
 
       html += `
         <div class="admin-row" style="flex-wrap:wrap;gap:0.5rem;align-items:center">
@@ -1920,6 +1930,7 @@ async function renderAdminPanel() {
             <strong>${knownName}</strong>
             <span style="font-size:0.8rem;color:#888">(${count} voorspellingen)</span>
             ${hintLines ? `<div style="font-size:0.78rem;color:#555;margin-top:0.2rem">Eerste scores: ${hintLines}</div>` : ""}
+            ${knockoutHints ? `<div style="font-size:0.78rem;color:#555;margin-top:0.1rem">Knockout: ${knockoutHints}</div>` : ""}
           </div>
           <select id="recover-select-${orphanUid}" style="flex:1;min-width:120px">
             <option value="">– kies deelnemer –</option>
