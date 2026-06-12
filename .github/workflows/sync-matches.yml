@@ -28,7 +28,7 @@ jobs:
                   awayTeam: .awayTeam.name,
                   utcDate: .utcDate,
                   status: .status,
-                  stage: .stage,
+                  stage: (.stage | if . == null then null elif . == "LAST_32" or . == "Last_32" or . == "ROUND_OF_32" then "LAST_32" elif . == "LAST_16" or . == "Last_16" or . == "ROUND_OF_16" then "LAST_16" elif . == "QUARTER_FINALS" or . == "Quarter_Finals" then "QUARTER_FINALS" elif . == "SEMI_FINALS" or . == "Semi_Finals" then "SEMI_FINALS" elif . == "THIRD_PLACE" or . == "Third_Place" or . == "THIRD_PLACE_MATCH" then "THIRD_PLACE" elif . == "FINAL" or . == "Final" then "FINAL" elif . == "GROUP_STAGE" or . == "Group_Stage" then "GROUP_STAGE" else . end),
                   homeScore:       (.score.fullTime.home // null),
                   awayScore:       (.score.fullTime.away // null),
                   penaltyHome:     (.score.penalties.home // null),
