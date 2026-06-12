@@ -42,7 +42,7 @@ const SCORING = {
     CHAMPION:       50
   }
 };
-const DEADLINE           = new Date("2026-06-12T19:00:00Z"); // Verlengd tot 21:00 Amsterdam voor Arend
+const DEADLINE           = new Date("2026-06-12T21:00:00Z"); // Verlengd tot 23:00 Amsterdam
 const THIRD_ADV_DEADLINE = new Date("2026-07-03T12:00:00Z"); // Na groepsfase, vóór eerste Last 32 met nummer-3
 const CACHE_KEY = "poule_matches_v1";
 const RESULTS_CACHE_MINUTES = 30;
@@ -1984,9 +1984,22 @@ window.recoverPredictions = async function(orphanUid) {
   if (!targetUid) { alert("Kies eerst een deelnemer."); return; }
 
   const status = document.getElementById("recover-status");
-  status.textContent = "⏳ Bezig...";
+  status.textContent = "⏳ Controleren...";
 
   try {
+    // Controleer of de doeldeelnemer al predictions heeft — zo ja, eerst bevestiging vragen
+    const existingSnap = await get(ref(db, `predictions/${targetUid}`));
+    if (existingSnap.exists()) {
+      const targetName = select.options[select.selectedIndex]?.text ?? targetUid;
+      const ok = confirm(
+        `⚠️ ${targetName} heeft al voorspellingen staan.\n\n` +
+        `Deze worden OVERSCHREVEN door de orphan-data.\n\n` +
+        `Weet je zeker dat je wilt doorgaan?`
+      );
+      if (!ok) { status.textContent = ""; return; }
+    }
+
+    status.textContent = "⏳ Bezig...";
     for (const node of ["predictions", "thirdplace", "thirdadvance"]) {
       const snap = await get(ref(db, `${node}/${orphanUid}`));
       if (snap.exists()) {
