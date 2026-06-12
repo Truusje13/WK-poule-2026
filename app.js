@@ -1879,8 +1879,67 @@ async function renderAdminPanel() {
     <button class="btn-primary" style="margin-top:1rem" onclick="saveBracketOverride()">💾 Toewijzing opslaan voor alle deelnemers</button>
     <div id="override-save-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>`;
 
+  // ── Data-herstel: zwevende predictions koppelen aan deelnemer ──
+  const predSnap = await get(ref(db, "predictions"));
+  const predUids = predSnap.exists() ? Object.keys(predSnap.val()) : [];
+  const participantUids = new Set(Object.keys(participants));
+  const orphanedUids = predUids.filter(uid => !participantUids.has(uid));
+
+  if (orphanedUids.length > 0) {
+    html += `
+      <h3 style="margin:1.5rem 0 0.5rem">🔁 Data-herstel</h3>
+      <p style="font-size:0.85rem;color:#666;margin-bottom:1rem">
+        Er zijn ${orphanedUids.length} set(s) voorspellingen gevonden die niet meer aan een deelnemer gekoppeld zijn.
+        Koppel ze hieronder aan de juiste deelnemer.
+      </p>
+      <div class="admin-list">`;
+
+    for (const orphanUid of orphanedUids) {
+      const orphanPreds = predSnap.val()[orphanUid];
+      const count = Object.keys(orphanPreds).length;
+      html += `
+        <div class="admin-row" style="flex-wrap:wrap;gap:0.5rem">
+          <span style="font-size:0.8rem;color:#888">ID: ${orphanUid.slice(0,8)}… (${count} voorspellingen)</span>
+          <select id="recover-select-${orphanUid}" style="flex:1;min-width:120px">
+            <option value="">– kies deelnemer –</option>
+            ${Object.entries(participants).sort(([,a],[,b]) => a.name.localeCompare(b.name))
+              .map(([uid, p]) => `<option value="${uid}">${p.name}</option>`).join("")}
+          </select>
+          <button class="btn-primary" style="padding:0.4rem 0.8rem;font-size:0.85rem"
+            onclick="recoverPredictions('${orphanUid}')">Koppelen</button>
+        </div>`;
+    }
+
+    html += `</div><div id="recover-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>`;
+  }
+
   container.innerHTML = html;
 }
+
+window.recoverPredictions = async function(orphanUid) {
+  const select = document.getElementById(`recover-select-${orphanUid}`);
+  const targetUid = select?.value;
+  if (!targetUid) { alert("Kies eerst een deelnemer."); return; }
+
+  const status = document.getElementById("recover-status");
+  status.textContent = "⏳ Bezig...";
+
+  try {
+    for (const node of ["predictions", "thirdplace", "thirdadvance"]) {
+      const snap = await get(ref(db, `${node}/${orphanUid}`));
+      if (snap.exists()) {
+        await set(ref(db, `${node}/${targetUid}`), snap.val());
+        await set(ref(db, `${node}/${orphanUid}`), null);
+      }
+    }
+    await recalculateStandings(targetUid);
+    status.textContent = "✅ Data hersteld en punten herberekend!";
+    setTimeout(() => renderAdminPanel(), 1500);
+  } catch(e) {
+    status.textContent = "❌ Fout: " + e.message;
+    console.error(e);
+  }
+};
 
 window.toggleHidden = async function(id, hide) {
   try {
