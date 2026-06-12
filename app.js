@@ -238,15 +238,6 @@ async function loadMatches() {
   ]);
   if (matchesSnap.exists()) matches = matchesSnap.val();
   bracketOverride = overrideSnap.exists() ? overrideSnap.val() : {};
-  // Corrigeer stage-waarden op basis van bekende bracket-IDs (API kan inconsistente waarden teruggeven)
-  for (const id of Object.keys(matches)) {
-    if (LAST_32_IDS.has(id)   && matches[id].stage !== "LAST_32")        matches[id].stage = "LAST_32";
-    else if (LAST_16_IDS.has(id)   && matches[id].stage !== "LAST_16")   matches[id].stage = "LAST_16";
-    else if (QF_IDS.has(id)        && matches[id].stage !== "QUARTER_FINALS") matches[id].stage = "QUARTER_FINALS";
-    else if (SF_IDS.has(id)        && matches[id].stage !== "SEMI_FINALS")    matches[id].stage = "SEMI_FINALS";
-    else if (id === "537389"        && matches[id].stage !== "THIRD_PLACE")   matches[id].stage = "THIRD_PLACE";
-    else if (id === "537390"        && matches[id].stage !== "FINAL")         matches[id].stage = "FINAL";
-  }
   // Punten herberekenen als er nieuwe uitslagen zijn
   if (Object.keys(matches).length > 0) {
     recalculateAllStandings().catch(console.error);
@@ -1615,12 +1606,6 @@ const KNOCKOUT_BRACKET = {
   // Finale (match 104)
   "537390": { home: { source: "537387", winner: true  }, away: { source: "537388", winner: true  } }, // M104: W101 vs W102
 };
-
-// Sets van match-IDs per ronde — voor stage-normalisatie bij laden
-const LAST_32_IDS = new Set(Object.keys(LAST_32_BRACKET));
-const LAST_16_IDS = new Set(["537376","537375","537377","537378","537379","537380","537381","537382"]);
-const QF_IDS      = new Set(["537383","537384","537385","537386"]);
-const SF_IDS      = new Set(["537387","537388"]);
 
 // Bepaal de winnaar (of verliezer) van een wedstrijd op basis van de voorspelling
 function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predStandings, tStats, cache = {}) {
