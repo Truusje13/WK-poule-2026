@@ -501,9 +501,10 @@ async function renderPredictions(overrideUid = null) {
           </div>`;
         }
 
+        const hasScore = pred.home !== "" && pred.home !== undefined && pred.home !== null;
         const scoreHtml = locked
-          ? `<span class="pred-score ${pred.home === "" ? "empty" : ""}">
-              ${pred.home !== "" ? `${pred.home}–${pred.away}` : "–"}
+          ? `<span class="pred-score ${!hasScore ? "empty" : ""}">
+              ${hasScore ? `${pred.home}–${pred.away}` : "–"}
              </span>`
           : `<input type="number" min="0" max="20" value="${pred.home ?? ""}"
                data-match="${m.id}" data-side="home" />
