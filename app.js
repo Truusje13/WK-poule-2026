@@ -1995,6 +1995,10 @@ async function renderAdminPanel() {
       <h3 style="margin-bottom:0.5rem">💾 Backup</h3>
       <p style="font-size:0.9rem;color:#666;margin-bottom:0.75rem">Download alle voorspellingen en standen als JSON-bestand. Bewaar dit regelmatig als veiligheid.</p>
       <button class="btn-secondary" onclick="downloadBackup()">⬇️ Download backup</button>
+      <div style="margin-top:1rem">
+        <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restoreBackup(this)" />
+        <button class="btn-secondary" style="background:#fff3e0;border-color:#e65100;color:#e65100" onclick="document.getElementById('restore-file-input').click()">⬆️ Backup terugzetten</button>
+      </div>
       <div id="backup-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>
     </div>`;
 
@@ -2029,6 +2033,44 @@ window.downloadBackup = async function() {
     URL.revokeObjectURL(url);
     status.textContent = "✅ Backup gedownload!";
     setTimeout(() => { status.textContent = ""; }, 3000);
+  } catch(e) {
+    status.textContent = "❌ Fout: " + e.message;
+  }
+};
+
+window.restoreBackup = async function(input) {
+  const status = document.getElementById("backup-status");
+  const file = input.files[0];
+  input.value = "";
+  if (!file) return;
+
+  const ok = confirm(
+    `⚠️ Weet je zeker dat je de backup wilt terugzetten?\n\n` +
+    `Alle huidige data in Firebase wordt OVERSCHREVEN met de inhoud van:\n${file.name}\n\n` +
+    `Dit kan niet ongedaan worden gemaakt.`
+  );
+  if (!ok) return;
+
+  status.textContent = "⏳ Backup lezen...";
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+
+    if (!backup.participants || !backup.predictions) {
+      throw new Error("Ongeldig backup-bestand — participants of predictions ontbreken.");
+    }
+
+    status.textContent = "⏳ Data terugzetten naar Firebase...";
+    await Promise.all([
+      set(ref(db, "participants"),  backup.participants),
+      set(ref(db, "predictions"),   backup.predictions),
+      set(ref(db, "standings"),     backup.standings   ?? {}),
+      set(ref(db, "thirdplace"),    backup.thirdplace  ?? {}),
+      set(ref(db, "thirdadvance"),  backup.thirdadvance ?? {}),
+    ]);
+
+    status.textContent = "✅ Backup succesvol teruggezet!";
+    setTimeout(() => renderAdminPanel(), 2000);
   } catch(e) {
     status.textContent = "❌ Fout: " + e.message;
   }
