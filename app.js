@@ -678,10 +678,16 @@ function showAutoSaveStatus(msg) {
   if (btn) btn.textContent = msg;
 }
 
+function getActivePredContainer() {
+  // Geeft de actieve container terug: admin-edit, eigen voorspellingen, of andere deelnemer
+  if (adminEditUser) return document.getElementById("admin-edit-container");
+  return document.getElementById("predictions-container");
+}
+
 function collectPredictionData() {
+  const container = getActivePredContainer();
   const data = {};
-  // Score-invoer
-  document.querySelectorAll("#predictions-container input[type=number]").forEach(input => {
+  container.querySelectorAll("input[type=number]").forEach(input => {
     const matchId = input.dataset.match;
     const side    = input.dataset.side;
     const val     = input.value.trim();
@@ -690,13 +696,12 @@ function collectPredictionData() {
       data[matchId][side] = parseInt(val);
     }
   });
-  // Penalty-invoer
-  document.querySelectorAll("#predictions-container input[type=checkbox][data-type='penalty']").forEach(cb => {
+  container.querySelectorAll("input[type=checkbox][data-type='penalty']").forEach(cb => {
     const matchId = cb.dataset.match;
     if (!data[matchId]) data[matchId] = {};
     data[matchId].penalty = cb.checked;
     if (cb.checked) {
-      const selectedBtn = document.querySelector(`.pen-btn.selected[data-match="${matchId}"]`);
+      const selectedBtn = container.querySelector(`.pen-btn.selected[data-match="${matchId}"]`);
       data[matchId].penaltyWinner = selectedBtn?.dataset.side ?? null;
     }
   });
@@ -704,13 +709,14 @@ function collectPredictionData() {
 }
 
 function collectThirdPlaceData() {
+  const container = getActivePredContainer();
   const thirdplace = {};
-  document.querySelectorAll(".third-select").forEach(sel => {
+  container.querySelectorAll(".third-select").forEach(sel => {
     if (sel.value) thirdplace[sel.dataset.group] = sel.value;
   });
 
   const thirdadvance = [];
-  document.querySelectorAll(".third-adv-cb:checked").forEach(cb => {
+  container.querySelectorAll(".third-adv-cb:checked").forEach(cb => {
     thirdadvance.push(cb.dataset.team);
   });
 

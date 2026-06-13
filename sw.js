@@ -1,4 +1,4 @@
-const CACHE_VERSION = "wk-poule-v15";
+const CACHE_VERSION = "wk-poule-v16";
 const ASSETS = ["/", "/index.html", "/style.css", "/app.js"];
 
 // Bij installatie: cache vullen en meteen activeren
