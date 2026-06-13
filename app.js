@@ -1086,15 +1086,20 @@ async function savePredictions() {
   btn.disabled = true;
   btn.textContent = "Opslaan...";
 
-  const data = collectPredictionData();
-
+  const locked = new Date() > DEADLINE;
   const { thirdplace, thirdadvance } = collectThirdPlaceData();
   try {
-    await Promise.all([
-      set(ref(db, `predictions/${currentUser.id}`), data),
+    const saves = [
       set(ref(db, `thirdplace/${currentUser.id}`), thirdplace),
       set(ref(db, `thirdadvance/${currentUser.id}`), thirdadvance),
-    ]);
+    ];
+    // Sla wedstrijdscores alleen op als de deadline nog niet verstreken is —
+    // daarna zijn de inputs vervangen door spans en zou set() alle scores wissen
+    if (!locked) {
+      const data = collectPredictionData();
+      saves.push(set(ref(db, `predictions/${currentUser.id}`), data));
+    }
+    await Promise.all(saves);
     await recalculateStandings(currentUser.id);
     btn.textContent = "✅ Opgeslagen!";
     setTimeout(() => {
