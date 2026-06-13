@@ -70,6 +70,7 @@ let matches        = {};    // matchId -> match object
 let bracketOverride = {};   // admin-override voor nummer-3 toewijzing
 let unsubStandings = null;
 let viewingUser    = null;  // { id, name } — deelnemer wiens voorspellingen je bekijkt
+let adminEditUser  = null;  // { id, name } — deelnemer wiens voorspellingen de beheerder bewerkt
 
 // ============================================================
 // INIT
@@ -224,6 +225,11 @@ function showView(name) {
     if (titleEl) titleEl.textContent = `Voorspellingen van ${viewingUser?.name ?? ""}`;
     renderPredictions(viewingUser?.id);
   }
+  if (name === "admin-edit") {
+    const titleEl = document.getElementById("admin-edit-title");
+    if (titleEl) titleEl.textContent = `Voorspellingen bewerken: ${adminEditUser?.name ?? ""}`;
+    renderPredictions(adminEditUser?.id, true);
+  }
   if (name === "standings") renderStandings();
   if (name === "admin") {
     document.getElementById("admin-login").classList.remove("hidden");
@@ -331,11 +337,14 @@ function calcPoints(match, pred) {
 // VOORSPELLINGEN RENDEREN
 // ============================================================
 
-async function renderPredictions(overrideUid = null) {
+async function renderPredictions(overrideUid = null, adminEdit = false) {
   const targetUid = overrideUid ?? currentUser.id;
-  const container = document.getElementById(overrideUid ? "other-predictions-container" : "predictions-container");
-  const locked         = overrideUid ? true : new Date() > DEADLINE;
-  const thirdAdvLocked = overrideUid ? true : new Date() > THIRD_ADV_DEADLINE;
+  const container = document.getElementById(
+    adminEdit ? "admin-edit-container" :
+    overrideUid ? "other-predictions-container" : "predictions-container"
+  );
+  const locked         = adminEdit ? false : (overrideUid ? true : new Date() > DEADLINE);
+  const thirdAdvLocked = adminEdit ? false : (overrideUid ? true : new Date() > THIRD_ADV_DEADLINE);
 
   if (Object.keys(matches).length === 0) {
     container.innerHTML = "<p class='loading'>⏳ Wedstrijden laden...</p>";
@@ -634,19 +643,20 @@ async function renderPredictions(overrideUid = null) {
     <div class="wc-team" id="wc-team">–</div>
   </div>`;
 
-  if (!overrideUid && (!locked || !thirdAdvLocked)) {
-    html += `<button class="save-btn" id="save-btn" onclick="savePredictions()">💾 Voorspellingen opslaan</button>`;
+  if (!overrideUid || adminEdit) {
+    const saveUid = adminEdit ? overrideUid : null;
+    html += `<button class="save-btn" id="save-btn" onclick="savePredictions(${saveUid ? `'${saveUid}'` : ''})">💾 Voorspellingen opslaan</button>`;
   }
 
   container.innerHTML = html;
 
   // Initialiseer tellers en overzichten
-  if (!overrideUid) updateThirdAdvCount();
-  updatePredictedAdvancement(overrideUid ? existing : null, overrideUid ? thirdAdvData : null);
-  updateGroupStandingsOverview(overrideUid ? existing : null);
-  updateWorldChampion(overrideUid ? existing : null, overrideUid ? thirdAdvData : null);
+  if (!overrideUid || adminEdit) updateThirdAdvCount();
+  updatePredictedAdvancement((overrideUid && !adminEdit) ? existing : null, (overrideUid && !adminEdit) ? thirdAdvData : null);
+  updateGroupStandingsOverview((overrideUid && !adminEdit) ? existing : null);
+  updateWorldChampion((overrideUid && !adminEdit) ? existing : null, (overrideUid && !adminEdit) ? thirdAdvData : null);
 
-  if (!overrideUid) {
+  if (!overrideUid || adminEdit) {
     let autoSaveTimer = null;
     container.querySelectorAll("input[type=number]").forEach(input => {
       input.addEventListener("input", () => {
@@ -1081,26 +1091,25 @@ function updatePredictedAdvancement(existingPreds = null, existingThirdAdv = nul
   }
 }
 
-async function savePredictions() {
+async function savePredictions(targetUid = null) {
+  const uid = targetUid ?? currentUser.id;
   const btn = document.getElementById("save-btn");
   btn.disabled = true;
   btn.textContent = "Opslaan...";
 
-  const locked = new Date() > DEADLINE;
+  const locked = targetUid ? false : new Date() > DEADLINE;
   const { thirdplace, thirdadvance } = collectThirdPlaceData();
   try {
     const saves = [
-      set(ref(db, `thirdplace/${currentUser.id}`), thirdplace),
-      set(ref(db, `thirdadvance/${currentUser.id}`), thirdadvance),
+      set(ref(db, `thirdplace/${uid}`), thirdplace),
+      set(ref(db, `thirdadvance/${uid}`), thirdadvance),
     ];
-    // Sla wedstrijdscores alleen op als de deadline nog niet verstreken is —
-    // daarna zijn de inputs vervangen door spans en zou set() alle scores wissen
     if (!locked) {
       const data = collectPredictionData();
-      saves.push(set(ref(db, `predictions/${currentUser.id}`), data));
+      saves.push(set(ref(db, `predictions/${uid}`), data));
     }
     await Promise.all(saves);
-    await recalculateStandings(currentUser.id);
+    await recalculateStandings(uid);
     btn.textContent = "✅ Opgeslagen!";
     setTimeout(() => {
       btn.disabled = false;
@@ -1834,6 +1843,7 @@ async function renderAdminPanel() {
             onchange="toggleHidden('${id}', this.checked)" />
           Verberg
         </label>
+        <button class="btn-secondary" style="font-size:0.8rem;padding:0.25rem 0.6rem" onclick="adminEditPredictions('${id}', '${p.name.replace(/'/g, "\\'")}')">✏️ Bewerk</button>
         <button class="btn-delete" onclick="deleteParticipant('${id}', '${p.name}')">🗑 Verwijderen</button>
       </div>`;
   }
@@ -2002,7 +2012,15 @@ async function renderAdminPanel() {
       <button class="btn-secondary" onclick="downloadBackup()">⬇️ Download backup</button>
       <div style="margin-top:1rem">
         <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restoreBackup(this)" />
-        <button class="btn-secondary" style="background:#fff3e0;border-color:#e65100;color:#e65100" onclick="document.getElementById('restore-file-input').click()">⬆️ Backup terugzetten</button>
+        <button class="btn-secondary" style="background:#fff3e0;border-color:#e65100;color:#e65100" onclick="document.getElementById('restore-file-input').click()">⬆️ Volledige backup terugzetten</button>
+      </div>
+      <div style="margin-top:0.75rem">
+        <input type="file" id="restore-partial-file-input" accept=".json" style="display:none" onchange="loadBackupForPartialRestore(this)" />
+        <button class="btn-secondary" onclick="document.getElementById('restore-partial-file-input').click()">👤 Één deelnemer terugzetten uit backup</button>
+      </div>
+      <div id="partial-restore-ui" style="margin-top:0.75rem;display:none">
+        <select id="partial-restore-select" style="padding:0.4rem;margin-right:0.5rem"></select>
+        <button class="btn-secondary" style="background:#fff3e0;border-color:#e65100;color:#e65100" onclick="restorePartial()">Zet deze deelnemer terug</button>
       </div>
       <div id="backup-status" style="margin-top:0.5rem;font-size:0.85rem;color:green"></div>
     </div>`;
@@ -2076,6 +2094,59 @@ window.restoreBackup = async function(input) {
 
     status.textContent = "✅ Backup succesvol teruggezet!";
     setTimeout(() => renderAdminPanel(), 2000);
+  } catch(e) {
+    status.textContent = "❌ Fout: " + e.message;
+  }
+};
+
+let _partialBackupData = null;
+
+window.loadBackupForPartialRestore = async function(input) {
+  const status = document.getElementById("backup-status");
+  const file = input.files[0];
+  input.value = "";
+  if (!file) return;
+  try {
+    const text = await file.text();
+    _partialBackupData = JSON.parse(text);
+    if (!_partialBackupData.participants || !_partialBackupData.predictions) {
+      throw new Error("Ongeldig backup-bestand.");
+    }
+    // Vul de dropdown met deelnemers uit de backup
+    const sel = document.getElementById("partial-restore-select");
+    sel.innerHTML = Object.entries(_partialBackupData.participants)
+      .sort(([,a],[,b]) => a.name.localeCompare(b.name))
+      .map(([uid, p]) => `<option value="${uid}">${p.name}</option>`)
+      .join("");
+    document.getElementById("partial-restore-ui").style.display = "block";
+    status.textContent = `✅ Backup geladen: ${Object.keys(_partialBackupData.participants).length} deelnemers gevonden.`;
+  } catch(e) {
+    status.textContent = "❌ Fout: " + e.message;
+  }
+};
+
+window.restorePartial = async function() {
+  const status = document.getElementById("backup-status");
+  if (!_partialBackupData) { status.textContent = "❌ Geen backup geladen."; return; }
+  const uid = document.getElementById("partial-restore-select").value;
+  const name = _partialBackupData.participants[uid]?.name ?? uid;
+  const ok = confirm(`Weet je zeker dat je de data van ${name} wilt terugzetten uit de backup?\n\nAlleen ${name}'s gegevens worden overschreven. Andere deelnemers blijven ongewijzigd.`);
+  if (!ok) return;
+  status.textContent = "⏳ Bezig...";
+  try {
+    const writes = [];
+    for (const node of ["predictions", "thirdplace", "thirdadvance"]) {
+      const data = _partialBackupData[node]?.[uid];
+      if (data) writes.push(set(ref(db, `${node}/${uid}`), data));
+    }
+    if (_partialBackupData.participants[uid]) {
+      writes.push(set(ref(db, `participants/${uid}`), _partialBackupData.participants[uid]));
+    }
+    await Promise.all(writes);
+    await recalculateStandings(uid);
+    status.textContent = `✅ Data van ${name} succesvol teruggezet!`;
+    document.getElementById("partial-restore-ui").style.display = "none";
+    _partialBackupData = null;
   } catch(e) {
     status.textContent = "❌ Fout: " + e.message;
   }
@@ -2242,6 +2313,17 @@ function triggerPenaltySave() {
 window.showOtherPredictions = function(uid, name) {
   viewingUser = { id: uid, name };
   showView('other-predictions');
+};
+
+window.adminEditPredictions = function(uid, name) {
+  adminEditUser = { id: uid, name };
+  showView('admin-edit');
+};
+
+window.cancelAdminEdit = function() {
+  adminEditUser = null;
+  showView('admin');
+  renderAdminPanel();
 };
 
 window.showView = showView;
