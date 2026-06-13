@@ -746,9 +746,9 @@ async function autoSave() {
 }
 
 function readCurrentPreds() {
+  const c = getActivePredContainer();
   const currentPreds = {};
-  // Score-invoer
-  document.querySelectorAll("#predictions-container input[type=number]").forEach(input => {
+  c.querySelectorAll("input[type=number]").forEach(input => {
     const matchId = input.dataset.match;
     const side    = input.dataset.side;
     const val     = input.value.trim();
@@ -757,13 +757,12 @@ function readCurrentPreds() {
       currentPreds[matchId][side] = parseInt(val);
     }
   });
-  // Penalty-invoer (ook meenemen voor bracket-resolutie)
-  document.querySelectorAll("#predictions-container input[type=checkbox][data-type='penalty']").forEach(cb => {
+  c.querySelectorAll("input[type=checkbox][data-type='penalty']").forEach(cb => {
     const matchId = cb.dataset.match;
     if (cb.checked) {
       if (!currentPreds[matchId]) currentPreds[matchId] = {};
       currentPreds[matchId].penalty = true;
-      const selectedBtn = document.querySelector(`.pen-btn.selected[data-match="${matchId}"]`);
+      const selectedBtn = c.querySelector(`.pen-btn.selected[data-match="${matchId}"]`);
       currentPreds[matchId].penaltyWinner = selectedBtn?.dataset.side ?? null;
     }
   });
@@ -771,8 +770,9 @@ function readCurrentPreds() {
 }
 
 function readCurrentThirdAdvData() {
+  const c = getActivePredContainer();
   const selected = [];
-  document.querySelectorAll(".third-adv-cb:checked").forEach(cb => {
+  c.querySelectorAll(".third-adv-cb:checked").forEach(cb => {
     if (cb.dataset.team) selected.push(cb.dataset.team);
   });
   return selected;
