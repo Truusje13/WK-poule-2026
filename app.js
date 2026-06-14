@@ -437,7 +437,7 @@ async function renderPredictions(overrideUid = null, adminEdit = false) {
       for (const m of sectionMatches) {
         const pred = existing[m.id] ?? { home: "", away: "" };
         const pts = calcPoints(m, pred);
-        const isFinished = m.status === "FINISHED";
+        const isFinished = m.status === "FINISHED" && m.homeScore != null;
 
         const metaHtml = isFinished
           ? `<span class="result">${m.homeScore}–${m.awayScore}</span>${
