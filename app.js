@@ -652,9 +652,10 @@ async function renderPredictions(overrideUid = null, adminEdit = false) {
 
   // Initialiseer tellers en overzichten
   if (!overrideUid || adminEdit) updateThirdAdvCount();
-  updatePredictedAdvancement((overrideUid && !adminEdit) ? existing : null, (overrideUid && !adminEdit) ? thirdAdvData : null);
-  updateGroupStandingsOverview((overrideUid && !adminEdit) ? existing : null);
-  updateWorldChampion((overrideUid && !adminEdit) ? existing : null, (overrideUid && !adminEdit) ? thirdAdvData : null);
+  const useExisting = !adminEdit && (!!overrideUid || locked);
+  updatePredictedAdvancement(useExisting ? existing : null, useExisting ? thirdAdvData : null);
+  updateGroupStandingsOverview(useExisting ? existing : null);
+  updateWorldChampion(useExisting ? existing : null, useExisting ? thirdAdvData : null);
 
   if (!overrideUid || adminEdit) {
     let autoSaveTimer = null;
