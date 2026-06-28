@@ -43,7 +43,7 @@ const SCORING = {
   }
 };
 const DEADLINE           = new Date("2026-06-12T21:00:00Z"); // Verlengd tot 23:00 Amsterdam
-const THIRD_ADV_DEADLINE = new Date("2026-07-03T12:00:00Z"); // Na groepsfase, vóór eerste Last 32 met nummer-3
+const THIRD_ADV_DEADLINE = new Date("2026-06-28T17:00:00Z"); // Gesloten op 28 juni 2026 19:00 Amsterdam
 const CACHE_KEY = "poule_matches_v1";
 const RESULTS_CACHE_MINUTES = 30;
 
