@@ -388,7 +388,7 @@ async function renderPredictions(overrideUid = null, adminEdit = false) {
   const thirdAdvData    = thirdAdvSnap2.exists()   ? thirdAdvSnap2.val()  : [];
 
   // Haal eventuele beheerder-override voor wereldkampioen op
-  const wcOverrideSnap  = await get(ref(db, `worldchampion/${targetUid}`));
+  const wcOverrideSnap  = await get(ref(db, `participants/${targetUid}/worldChampion`));
   const wcOverride      = wcOverrideSnap.exists() ? wcOverrideSnap.val() : null;
 
   // Groepeer per ronde, daarbinnen per groep (alleen groepsfase)
@@ -1840,15 +1840,17 @@ async function renderAdminPanel() {
   const container = document.getElementById("admin-participants-list");
   container.innerHTML = "<p class='loading'>Laden...</p>";
 
-  const [partSnap, overrideSnap, wcOverridesSnap] = await Promise.all([
+  const [partSnap, overrideSnap] = await Promise.all([
     get(ref(db, "participants")),
     get(ref(db, "bracketOverride")),
-    get(ref(db, "worldchampion")),
   ]);
 
   const participants = partSnap.exists() ? partSnap.val() : {};
   const savedOverride = overrideSnap.exists() ? overrideSnap.val() : {};
-  const wcOverrides = wcOverridesSnap.exists() ? wcOverridesSnap.val() : {};
+  // worldChampion override zit opgeslagen per deelnemer in participants/{uid}/worldChampion
+  const wcOverrides = Object.fromEntries(
+    Object.entries(participants).map(([id, p]) => [id, p.worldChampion ?? null])
+  );
 
   // Bouw gesorteerde teamlijst voor de dropdown
   const allTeams = new Set();
@@ -2371,12 +2373,8 @@ window.cancelAdminEdit = function() {
 window.adminSaveChampion = async function(uid, name) {
   const select = document.getElementById(`wc-select-${uid}`);
   if (!select) return;
-  const team = select.value;
-  if (team) {
-    await set(ref(db, `worldchampion/${uid}`), team);
-  } else {
-    await set(ref(db, `worldchampion/${uid}`), null);
-  }
+  const team = select.value || null;
+  await set(ref(db, `participants/${uid}/worldChampion`), team);
   await renderAdminPanel();
   // Herstel geselecteerde waarde in dropdown na herrenderen
   const newSelect = document.getElementById(`wc-select-${uid}`);
