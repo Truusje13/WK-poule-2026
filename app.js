@@ -895,13 +895,13 @@ function updateWorldChampion(existingPreds = null, existingThirdAdv = null) {
   const b = KNOCKOUT_BRACKET[FINAL_ID];
   if (!b) return;
 
-  const champion = resolveRoundTeam(b.home.source, true, currentPreds, thirdAssignment, pred, teamStats, cache)
-                ?? resolveRoundTeam(b.away.source, true, currentPreds, thirdAssignment, pred, teamStats, cache);
+  const champion = resolveRoundTeam(b.home.source, true, currentPreds, thirdAssignment, pred, teamStats, cache, true)
+                ?? resolveRoundTeam(b.away.source, true, currentPreds, thirdAssignment, pred, teamStats, cache, true);
 
   // Probeer winnaar van de finale zelf te bepalen
-  const home = resolveRoundTeam(b.home.source, b.home.winner, currentPreds, thirdAssignment, pred, teamStats, cache);
-  const away = resolveRoundTeam(b.away.source, b.away.winner, currentPreds, thirdAssignment, pred, teamStats, cache);
-  const finalWinner = resolveRoundTeam(FINAL_ID, true, currentPreds, thirdAssignment, pred, teamStats, cache);
+  const home = resolveRoundTeam(b.home.source, b.home.winner, currentPreds, thirdAssignment, pred, teamStats, cache, true);
+  const away = resolveRoundTeam(b.away.source, b.away.winner, currentPreds, thirdAssignment, pred, teamStats, cache, true);
+  const finalWinner = resolveRoundTeam(FINAL_ID, true, currentPreds, thirdAssignment, pred, teamStats, cache, true);
 
   if (finalWinner) {
     el.textContent = t(finalWinner);
@@ -1643,7 +1643,7 @@ const KNOCKOUT_BRACKET = {
 };
 
 // Bepaal de winnaar (of verliezer) van een wedstrijd op basis van de voorspelling
-function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predStandings, tStats, cache = {}) {
+function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predStandings, tStats, cache = {}, predictedOnly = false) {
   const key = `${sourceMatchId}-${isWinner ? "W" : "L"}`;
   if (cache[key] !== undefined) return cache[key];
 
@@ -1652,7 +1652,7 @@ function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predS
 
   // Teams bepalen
   let home, away;
-  if (m.homeTeam && m.awayTeam) {
+  if (!predictedOnly && m.homeTeam && m.awayTeam) {
     home = m.homeTeam;
     away = m.awayTeam;
   } else if (LAST_32_BRACKET[sourceMatchId]) {
@@ -1661,8 +1661,8 @@ function resolveRoundTeam(sourceMatchId, isWinner, preds, thirdAssignment, predS
     away = resolveBracketSlot(slot.away, predStandings, tStats, sourceMatchId, "away", thirdAssignment).team;
   } else if (KNOCKOUT_BRACKET[sourceMatchId]) {
     const b = KNOCKOUT_BRACKET[sourceMatchId];
-    home = resolveRoundTeam(b.home.source, b.home.winner, preds, thirdAssignment, predStandings, tStats, cache);
-    away = resolveRoundTeam(b.away.source, b.away.winner, preds, thirdAssignment, predStandings, tStats, cache);
+    home = resolveRoundTeam(b.home.source, b.home.winner, preds, thirdAssignment, predStandings, tStats, cache, predictedOnly);
+    away = resolveRoundTeam(b.away.source, b.away.winner, preds, thirdAssignment, predStandings, tStats, cache, predictedOnly);
   }
   if (!home || !away) return (cache[key] = null);
 
