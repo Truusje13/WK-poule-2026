@@ -387,6 +387,10 @@ async function renderPredictions(overrideUid = null, adminEdit = false) {
   const thirdPlaceData  = thirdPlaceSnap.exists()  ? thirdPlaceSnap.val() : {};
   const thirdAdvData    = thirdAdvSnap2.exists()   ? thirdAdvSnap2.val()  : [];
 
+  // Haal eventuele beheerder-override voor wereldkampioen op
+  const wcOverrideSnap  = await get(ref(db, `worldchampion/${targetUid}`));
+  const wcOverride      = wcOverrideSnap.exists() ? wcOverrideSnap.val() : null;
+
   // Groepeer per ronde, daarbinnen per groep (alleen groepsfase)
   const stages = {};
   for (const [id, m] of Object.entries(matches)) {
@@ -655,7 +659,7 @@ async function renderPredictions(overrideUid = null, adminEdit = false) {
   const useExisting = !adminEdit && (!!overrideUid || locked);
   updatePredictedAdvancement(useExisting ? existing : null, useExisting ? thirdAdvData : null);
   updateGroupStandingsOverview(useExisting ? existing : null);
-  updateWorldChampion(useExisting ? existing : null, useExisting ? thirdAdvData : null);
+  updateWorldChampion(useExisting ? existing : null, useExisting ? thirdAdvData : null, wcOverride);
 
   if (!overrideUid || adminEdit) {
     let autoSaveTimer = null;
@@ -880,9 +884,15 @@ function calculateActualTeamStats() {
   return stats;
 }
 
-function updateWorldChampion(existingPreds = null, existingThirdAdv = null) {
+function updateWorldChampion(existingPreds = null, existingThirdAdv = null, championOverride = null) {
   const el = document.getElementById("wc-team");
   if (!el) return;
+
+  if (championOverride) {
+    el.textContent = t(championOverride);
+    el.classList.remove("wc-unknown");
+    return;
+  }
 
   const currentPreds       = existingPreds ?? readCurrentPreds();
   const currentThirdAdv    = existingThirdAdv ?? readCurrentThirdAdvData();
@@ -1830,18 +1840,30 @@ async function renderAdminPanel() {
   const container = document.getElementById("admin-participants-list");
   container.innerHTML = "<p class='loading'>Laden...</p>";
 
-  const [partSnap, overrideSnap] = await Promise.all([
+  const [partSnap, overrideSnap, wcOverridesSnap] = await Promise.all([
     get(ref(db, "participants")),
-    get(ref(db, "bracketOverride"))
+    get(ref(db, "bracketOverride")),
+    get(ref(db, "worldchampion")),
   ]);
 
   const participants = partSnap.exists() ? partSnap.val() : {};
   const savedOverride = overrideSnap.exists() ? overrideSnap.val() : {};
+  const wcOverrides = wcOverridesSnap.exists() ? wcOverridesSnap.val() : {};
+
+  // Bouw gesorteerde teamlijst voor de dropdown
+  const allTeams = new Set();
+  for (const m of Object.values(matches)) {
+    if (m.homeTeam) allTeams.add(m.homeTeam);
+    if (m.awayTeam) allTeams.add(m.awayTeam);
+  }
+  const teamOptions = [...allTeams].sort((a, b) => t(a).localeCompare(t(b)))
+    .map(team => `<option value="${team}">${t(team)}</option>`).join("");
 
   // ── Deelnemers ──
   let html = `<h3 style="margin:1rem 0 0.5rem">Deelnemers</h3><div class="admin-list">`;
   for (const [id, p] of Object.entries(participants).sort(([,a],[,b]) => a.name.localeCompare(b.name))) {
     const hidden = p.hidden === true;
+    const currentWC = wcOverrides[id] ?? null;
     html += `
       <div class="admin-row" id="admin-row-${id}">
         <span class="admin-name ${hidden ? "admin-name-hidden" : ""}">${p.name}${hidden ? " <em>(verborgen)</em>" : ""}</span>
@@ -1851,6 +1873,13 @@ async function renderAdminPanel() {
           Verberg
         </label>
         <button class="btn-secondary" style="font-size:0.8rem;padding:0.25rem 0.6rem" onclick="adminEditPredictions('${id}', '${p.name.replace(/'/g, "\\'")}')">✏️ Bewerk</button>
+        <span style="font-size:0.8rem;display:flex;align-items:center;gap:0.3rem">
+          🏆 <select id="wc-select-${id}" style="font-size:0.8rem">
+            <option value="">(berekend)</option>${teamOptions}
+          </select>
+          <button class="btn-secondary" style="font-size:0.75rem;padding:0.2rem 0.5rem" onclick="adminSaveChampion('${id}', '${p.name.replace(/'/g, "\\'")}')">Sla op</button>
+          ${currentWC ? `<span style="color:var(--orange-dark);font-size:0.75rem">→ ${t(currentWC)}</span>` : ""}
+        </span>
         <button class="btn-delete" onclick="deleteParticipant('${id}', '${p.name}')">🗑 Verwijderen</button>
       </div>`;
   }
@@ -2033,6 +2062,12 @@ async function renderAdminPanel() {
     </div>`;
 
   container.innerHTML = html;
+
+  // Zet de dropdown op de huidige override-waarde
+  for (const [id] of Object.entries(participants)) {
+    const select = document.getElementById(`wc-select-${id}`);
+    if (select && wcOverrides[id]) select.value = wcOverrides[id];
+  }
 }
 
 window.downloadBackup = async function() {
@@ -2331,6 +2366,21 @@ window.cancelAdminEdit = function() {
   adminEditUser = null;
   showView('admin');
   renderAdminPanel();
+};
+
+window.adminSaveChampion = async function(uid, name) {
+  const select = document.getElementById(`wc-select-${uid}`);
+  if (!select) return;
+  const team = select.value;
+  if (team) {
+    await set(ref(db, `worldchampion/${uid}`), team);
+  } else {
+    await set(ref(db, `worldchampion/${uid}`), null);
+  }
+  await renderAdminPanel();
+  // Herstel geselecteerde waarde in dropdown na herrenderen
+  const newSelect = document.getElementById(`wc-select-${uid}`);
+  if (newSelect && team) newSelect.value = team;
 };
 
 window.showView = showView;
