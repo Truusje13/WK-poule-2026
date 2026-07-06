@@ -372,12 +372,13 @@ async function renderPredictions(overrideUid = null, adminEdit = false) {
     }
   }
 
-  let predSnap, thirdPlaceSnap, thirdAdvSnap2;
+  let predSnap, thirdPlaceSnap, thirdAdvSnap2, partSnap;
   try {
-    [predSnap, thirdPlaceSnap, thirdAdvSnap2] = await Promise.all([
+    [predSnap, thirdPlaceSnap, thirdAdvSnap2, partSnap] = await Promise.all([
       get(ref(db, `predictions/${targetUid}`)),
       get(ref(db, `thirdplace/${targetUid}`)),
       get(ref(db, `thirdadvance/${targetUid}`)),
+      get(ref(db, `participants/${targetUid}`)),
     ]);
   } catch(e) {
     container.innerHTML = `<div class="notice" style="margin-top:1rem">⚠️ Voorspellingen konden niet worden geladen.<br><small style="opacity:0.7">Fout: ${e.message}</small><p style="margin-top:0.75rem"><button onclick="renderPredictions(${overrideUid ? `'${overrideUid}'` : ''})" class="btn-secondary">🔄 Opnieuw proberen</button></p></div>`;
@@ -386,10 +387,7 @@ async function renderPredictions(overrideUid = null, adminEdit = false) {
   const existing        = predSnap.exists()       ? predSnap.val()       : {};
   const thirdPlaceData  = thirdPlaceSnap.exists()  ? thirdPlaceSnap.val() : {};
   const thirdAdvData    = thirdAdvSnap2.exists()   ? thirdAdvSnap2.val()  : [];
-
-  // Haal eventuele beheerder-override voor wereldkampioen op
-  const wcOverrideSnap  = await get(ref(db, `participants/${targetUid}/worldChampion`));
-  const wcOverride      = wcOverrideSnap.exists() ? wcOverrideSnap.val() : null;
+  const wcOverride      = partSnap?.exists() ? (partSnap.val()?.worldChampion ?? null) : null;
 
   // Groepeer per ronde, daarbinnen per groep (alleen groepsfase)
   const stages = {};
